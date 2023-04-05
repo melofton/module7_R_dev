@@ -1,7 +1,7 @@
 Macrosystems EDDIE Module 7: Using Data to Improve Ecological Forecasts
 ================
 Mary Lofton, Tadhg Moore, Quinn Thomas, Cayelan Carey
-2023-03-29
+2023-04-05
 
 ## Set-up (not shown)
 
@@ -178,9 +178,10 @@ get_model_dates = function(model_start, model_stop, time_step = 'days'){
 #' @param n_en number of ensembles
 get_Y_vector = function(n_states, n_params_est, n_step, n_en){
   
-  Y = array(dim = c(n_states + n_params_est, n_step, n_en))
+  Y_ic = array(dim = c(n_states + n_params_est, n_step, n_en))
+  Y_pred = array(dim = c(n_states + n_params_est, n_step, n_en))
   
-  return(Y)
+  return(list(Y_ic = Y_ic, Y_pred = Y_pred))
 }
 ```
 
@@ -324,7 +325,12 @@ initialize_Y = function(Y, obs, init_params, n_states_est, n_params_est, n_param
     first_params = NULL
   }
   
-  Y[ , 1, ] = array(abs(rnorm(n = n_en * (n_states_est + n_params_est),
+  Y$Y_ic[ , 1, ] = array(abs(rnorm(n = n_en * (n_states_est + n_params_est),
+                              mean = c(first_obs, first_params),
+                              sd = c(state_sd, param_sd))),
+                    dim = c(c(n_states_est + n_params_est), n_en))
+  
+  Y$Y_pred[ , 1, ] = array(abs(rnorm(n = n_en * (n_states_est + n_params_est),
                               mean = c(first_obs, first_params),
                               sd = c(state_sd, param_sd))),
                     dim = c(c(n_states_est + n_params_est), n_en))
@@ -410,6 +416,8 @@ EnKF = function(n_en = 30,
                    n_params_est = n_params_est,
                    n_step = n_step,
                    n_en = n_en)
+  Y_ic = Y$Y_ic
+  Y_pred = Y$Y_pred
   
   # observation error matrix
   R = get_obs_error_matrix(n_states = n_states_est,
@@ -429,6 +437,8 @@ EnKF = function(n_en = 30,
   Y = initialize_Y(Y = Y, obs = obs, init_params = param_init, n_states_est = n_states_est,
                    n_params_est = n_params_est, n_params_obs = n_params_obs,
                    n_step = n_step, n_en = n_en, state_sd = init_cond_sd, param_sd = param_sd, yini = yini)
+  Y_ic = Y$Y_ic
+  Y_pred = Y$Y_pred
   
   
   # start modeling
@@ -437,7 +447,7 @@ EnKF = function(n_en = 30,
       
       # run model; 
       model_output = pred_AR_model(mod = mod, 
-                              chla = Y[1, t-1, n])
+                              chla = Y_ic[1, t-1, n])
       
       ######quick hack to add in process error (ha!)########
       
@@ -447,25 +457,30 @@ EnKF = function(n_en = 30,
       
       #specify sigma (covariance matrix of states and updating parameters)
       residual_matrix <- matrix(NA, nrow = 4, ncol = 4)
-      residual_matrix[1,] <- c(0.05, 0.01, 0.01, 0.01)
-      residual_matrix[2,] <- c(0.1, 0.02, 0.02, 0.02)
-      residual_matrix[3,] <- c(0.15, 0.03, 0.03, 0.03)
-      residual_matrix[4,] <- c(-0.15, -0.03, -0.03, -0.03)
+      residual_matrix[1,] <- c(0.03, 0.01, 0.01, 0.01)
+      residual_matrix[2,] <- c(0.07, 0.02, 0.02, 0.02)
+      residual_matrix[3,] <- c(0.11, 0.03, 0.03, 0.03)
+      residual_matrix[4,] <- c(-0.11, -0.03, -0.03, -0.03)
       sigma_proc <- cov(residual_matrix)
       
       #make a draw from Y_star
       Y_draw = abs(rmvnorm(1, mean = Y_star, sigma = sigma_proc))
-      Y[1 , t, n] = Y_draw[1] # store in Y vector
-      Y[2 , t, n] = Y_draw[2]
-      Y[3 , t, n] = Y_draw[3]
-      Y[4 , t, n] = Y_draw[4]
+      Y_ic[1 , t, n] = Y_draw[1] # store in Y vector
+      Y_ic[2 , t, n] = Y_draw[2]
+      Y_ic[3 , t, n] = Y_draw[3]
+      Y_ic[4 , t, n] = Y_draw[4]
+      
+      Y_pred[1 , t, n] = Y_draw[1] # store in Y vector
+      Y_pred[2 , t, n] = Y_draw[2]
+      Y_pred[3 , t, n] = Y_draw[3]
+      Y_pred[4 , t, n] = Y_draw[4]
       
       #####end of hack######################################
       
     }
     # check if there are any observations to assimilate 
     if(any(!is.na(obs[ , , t]))){
-      Y = kalman_filter(Y = Y,
+      Y_ic = kalman_filter(Y = Y_ic,
                         R = R,
                         obs = obs,
                         H = H,
@@ -473,7 +488,7 @@ EnKF = function(n_en = 30,
                         cur_step = t) # updating params / states if obs available
     }
   }
-  out = list(Y = Y, dates = dates, R = R, obs = obs, state_sd = state_sd)
+  out = list(Y_ic = Y_ic, Y_pred = Y_pred, dates = dates, R = R, obs = obs, state_sd = state_sd)
   
   return(out)
 }
@@ -489,7 +504,7 @@ EnKF = function(n_en = 30,
 rmse <- function(est_out, lake_data){
   
   #get ensemble mean
-  mean_chla_est = exp(apply(est_out$Y[1,,] , 1, FUN = mean))
+  mean_chla_est = exp(apply(est_out$Y_pred[1,,] , 1, FUN = mean))
 
   #limit obs to forecast dates
   lake_data1 <- lake_data %>%
@@ -513,29 +528,129 @@ rmse <- function(est_out, lake_data){
 #' 
 #' @param est_out forecast output from EnKF wrapper 
 #' @param lake_data NEON data for selected site formatted using format_enkf_inputs function
-plot_chla = function(est_out, lake_data){
-  mean_chla_est = exp(apply(est_out$Y[1,,] , 1, FUN = mean))
-  lake_data <- lake_data %>%
-    mutate(datetime = as.Date(datetime)) %>%
-    filter(datetime %in% est_out$dates)
-  plot(mean_chla_est ~ est_out$dates, type ='l', 
-       ylim = range(exp(est_out$Y[1,,]), na.rm = TRUE ),
-       col = 'grey', ylab = 'chla (mg L-1)', xlab = '')
-  for(i in 2:n_en){
-    lines(exp(est_out$Y[1,,i])  ~ est_out$dates, 
-          col = 'grey')
+#' @param start start date
+#' @param stop stop date
+#' @param n_en number of ensemble members
+#' @param layers specified which layers to plot (fc_violin, ic_violin, ensemble, obs_assim, obs_not_assim)
+#' @param days_to_plot how many days to plot? range from 1 to end of forecast period
+#' 
+plot_chla = function(est_out, lake_data, obs_file, start, stop, n_en){
+  
+  plot_dates <- get_model_dates(model_start = start,
+                                          model_stop = stop,
+                                          time_step = "days")
+
+  assim_data <- obs_file %>%
+    rename(obs_assimilated = chla) %>%
+    # mutate(assim_key1 = ifelse(!is.na(obs_assimilated) | !is.na(lag(obs_assimilated)), 1, 0),
+    #        assim_key2 = ifelse(!is.na(obs_assimilated) | !is.na(lead(obs_assimilated)), 1, 0),
+    #        assim_key3 = ifelse(!is.na(obs_assimilated), 1, 0),
+    #        obs_assimilated = exp(obs_assimilated))
+    mutate(assim_key1 = ifelse(!is.na(obs_assimilated), 1, 0),
+           assim_key2 = ifelse(!is.na(lag(obs_assimilated)), 1, 0),
+           obs_assimilated = exp(obs_assimilated))
+  
+  chla_pred = NULL
+  chla_ic = NULL
+  for(i in 1:length(plot_dates)){
+    chla_pred <- c(chla_pred, exp(est_out$Y_pred[1,i,]))
+    chla_ic <- c(chla_ic, exp(est_out$Y_ic[1,i,]))
   }
-  lines(mean_chla_est ~ est_out$dates, col = 'black', lwd =2 )
-  points(exp(lake_data$chla[1:35])  ~ 
-           est_out$dates[1:35], pch = 16, col = 'blue')
-  points(exp(est_out$obs[1,,])  ~ 
-           est_out$dates, pch = 16, col = 'red')
-  arrows(est_out$dates[1:35], exp(lake_data$chla[1:35])  - exp(est_out$state_sd[1]), 
-         est_out$dates[1:35], exp(lake_data$chla[1:35])  + exp(est_out$state_sd[1]), 
-         code = 3, length = 0.1, angle = 90, col = 'blue')
-  arrows(est_out$dates, exp(est_out$obs[1,,])  - exp(est_out$state_sd[1]), 
-         est_out$dates, exp(est_out$obs[1,,])  + exp(est_out$state_sd[1]), 
-         code = 3, length = 0.1, angle = 90, col = 'red')
+  
+  plot_data <- tibble(datetime = rep(plot_dates, each = n_en),
+                   ensemble_member = rep(1:n_en, times = length(plot_dates)),
+                   chla_pred = chla_pred,
+                   chla_ic = chla_ic) %>%
+    left_join(., lake_data, by = "datetime") %>%
+    left_join(., assim_data, by = "datetime")
+  
+  plot_data2 <- plot_data %>%
+    add_column(datefactor = as.factor(format(as.Date(plot_data$datetime), "%m-%d"))) %>%
+    mutate(chla = exp(chla),
+           chla_fc = ifelse(datefactor == "09-25", NA, chla_pred))
+  
+  ens <- plot_data2 %>%
+    select(datetime, ensemble_member)
+  
+  for(d in 1:(length(plot_dates)-1)){
+    
+    obs <- obs_file %>% filter(datetime == plot_dates[d])
+    
+    if(!is.na(obs$chla)){
+      
+      ic <- plot_data2 %>%
+        filter(datetime == ymd(plot_dates[d])) %>%
+        pull(chla_ic)
+      
+      pred <- plot_data2 %>%
+        filter(datetime == ymd(plot_dates[d])+1) %>%
+        pull(chla_pred)
+      
+      temp <- tibble(datetime = rep(seq(from = ymd(plot_dates[d]), to = ymd(plot_dates[d])+1, by = "day"), each = n_en),
+                     ensemble_member = rep(1:n_en, times = 2),
+                     chla_ens_today = c(ic, pred))
+      
+      newName <- setNames("chla_ens_today", paste0("chla_ens_",plot_dates[d]))
+
+      ens <- ens %>%
+        left_join(., temp, by = c("datetime","ensemble_member")) %>%
+        rename(all_of(newName))
+    } else {
+      ic <- plot_data2 %>%
+        filter(datetime == ymd(plot_dates[d])) %>%
+        pull(chla_pred)
+      
+      pred <- plot_data2 %>%
+        filter(datetime == ymd(plot_dates[d])+1) %>%
+        pull(chla_pred)
+      
+      temp <- tibble(datetime = rep(seq(from = ymd(plot_dates[d]), to = ymd(plot_dates[d])+1, by = "day"), each = n_en),
+                     ensemble_member = rep(1:n_en, times = 2),
+                     chla_ens_today = c(ic, pred))
+      
+      newName <- setNames("chla_ens_today", paste0("chla_ens_",plot_dates[d]))
+
+      ens <- ens %>%
+        left_join(., temp, by = c("datetime","ensemble_member")) %>%
+        rename(all_of(newName))
+    }
+      
+  }
+  
+  ens <- ens %>%
+    add_column(datefactor = as.factor(format(as.Date(plot_data$datetime), "%m-%d"))) %>%
+    pivot_longer(cols = -c(datetime, ensemble_member, datefactor), names_to = "ensemble_date",
+                 values_to = "ens")  %>%
+    filter(complete.cases(.)) 
+    
+  p <- ggplot()+
+    geom_line(data = ens, aes(x = datefactor, y = ens, group = interaction(ensemble_date, ensemble_member), color = "Ensemble members"))+
+    geom_violin(data = plot_data2, aes(x = datefactor, y = chla_fc, fill = "Forecast for today"), color = "black",
+                scale = "width", width = 0.7)+
+    geom_violin(data = plot_data2, aes(x = datefactor, y = chla_ic, fill = "Initial condition for tomorrow's forecast"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_point(data = plot_data2, aes(x = datefactor, y = chla, color = "Non-assimilated observations"))+
+    geom_point(data = plot_data2, aes(x = datefactor, y = obs_assimilated, color = "Assimilated observations"))+
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    xlab("")+
+    theme_bw()+
+    theme(panel.grid.major.x = element_line(colour = "black", linetype = "dashed"),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_color_manual(values = c("Ensemble members" = "lightgray",
+                                  "Non-assimilated observations" = "black",
+                                  "Assimilated observations" = "orange"), 
+                       name = "",
+                       guide = guide_legend(override.aes = list(
+                         linetype = c("blank","solid","blank"),
+                         shape = c(16,NA, 16))))+
+    scale_fill_manual(values = c("Forecast for today" = "white", "Initial condition for tomorrow's forecast" = "cornflowerblue"),
+                      name = "",
+                      guide = guide_legend(override.aes = list(
+                         color = c("black","cornflowerblue"))))+
+    ggtitle("1-day-ahead forecasts generated every day")
+  
+  return(p)
 }
 ```
 
@@ -547,7 +662,7 @@ plot_chla = function(est_out, lake_data){
 #' @param est_out forecast output from EnKF wrapper 
 #' @param lake_data NEON data for selected site formatted using format_enkf_inputs function
 pred_v_obs_chla = function(est_out, lake_data){
-  mean_chla_est = exp(apply(est_out$Y[1,,] , 1, FUN = mean))
+  mean_chla_est = exp(apply(est_out$Y_pred[1,,] , 1, FUN = mean))
   
   # this could be used to show a 95% confidence error bar on predicted
   # but I think the error bars make the plot a bit hard to read
@@ -635,14 +750,14 @@ for that variable.
 
 ``` r
 #format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 36,
+obs_file <- create_data_assim_inputs(freq_chla = 11,
                                      lake_data = lake_data,
                                      start_date = start_date)
 n_en = 100 # how many ensemble members 
 #run the forecast!
 est_out = EnKF(n_en = n_en, 
            start = '2020-09-25', # start date 
-           stop = '2020-10-29', # stop date
+           stop = '2020-10-05', # stop date
            time_step = 'days',
            obs_file = obs_file,
            n_states_est = 1, 
@@ -651,12 +766,16 @@ est_out = EnKF(n_en = n_en,
            param_init = c(mod$intercept, mod$ar1, mod$mean), 
            obs_cv = c(0.05),#cv for chl-a 
            param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.1),#cv for chl-a 
+           init_cond_cv = c(0.05),#cv for chl-a 
            state_names = c("chla"),
            yini = yini)
 #plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data) 
+plot_chla(est_out = est_out, lake_data = lake_data, obs_file = obs_file, start = "2020-09-25", stop = "2020-10-05", n_en = n_en) 
 ```
+
+    ## Warning: Removed 100 rows containing non-finite values (`stat_ydensity()`).
+
+    ## Warning: Removed 1000 rows containing missing values (`geom_point()`).
 
 ![](module7_files/figure-gfm/unnamed-chunk-20-1.png)<!-- -->
 
@@ -671,7 +790,7 @@ rmse(est_out = est_out, lake_data = lake_data)
 ```
 
     ## $rmse_chla
-    ## [1] 1.325239
+    ## [1] 1.149247
 
 ### Run forecast with chl-a data assimilated every week
 
@@ -682,14 +801,14 @@ will proceed without assimilating chl-a data for that day.
 
 ``` r
 #format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 7,
+obs_file <- create_data_assim_inputs(freq_chla = 4,
                                      lake_data = lake_data,
                                      start_date = start_date)
 n_en = 100 # how many ensemble members 
 #run the forecast!
 est_out = EnKF(n_en = n_en, 
            start = '2020-09-25', # start date 
-           stop = '2020-10-29', # stop date
+           stop = '2020-10-05', # stop date
            time_step = 'days',
            obs_file = obs_file,
            n_states_est = 1, 
@@ -698,12 +817,16 @@ est_out = EnKF(n_en = n_en,
            param_init = c(mod$intercept, mod$ar1, mod$mean), 
            obs_cv = c(0.05),#cv for chl-a 
            param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.1),#cv for chl-a 
+           init_cond_cv = c(0.05),#cv for chl-a 
            state_names = c("chla"),
            yini = yini)
 #plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data) 
+plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
 ```
+
+    ## Warning: Removed 100 rows containing non-finite values (`stat_ydensity()`).
+
+    ## Warning: Removed 800 rows containing missing values (`geom_point()`).
 
 ![](module7_files/figure-gfm/unnamed-chunk-21-1.png)<!-- -->
 
@@ -718,9 +841,109 @@ rmse(est_out = est_out, lake_data = lake_data)
 ```
 
     ## $rmse_chla
-    ## [1] 0.6341649
+    ## [1] 0.6211738
 
-## Objective 8: Explore observation uncertainty
+## Objective 8: Explore data frequency
+
+This objective asks students to adjust the observation frequency (and
+therefore the assimilation frequency) of chl-a data. The learning
+outcome of the objective is for students to understand that more
+frequent data assimilation may permit for more accurate forecasts, as
+models closely track real-world conditions. Below are two examples: one
+where chla is assimilated low frequency (every 7 days) and one where
+chl-a is assimilated at high frequency (daily).
+
+### Low chl-a assimilation frequency
+
+``` r
+#format observation data file depending on selected frequency of data assimilation
+obs_file <- create_data_assim_inputs(freq_chla = 7,
+                                     lake_data = lake_data,
+                                     start_date = start_date)
+n_en = 100 # how many ensemble members 
+#run the forecast!
+est_out = EnKF(n_en = n_en, 
+           start = '2020-09-25', # start date 
+           stop = '2020-10-05', # stop date
+           time_step = 'days',
+           obs_file = obs_file,
+           n_states_est = 1, 
+           n_params_est = 3,
+           n_params_obs = 0,
+           param_init = c(mod$intercept, mod$ar1, mod$mean), 
+           obs_cv = c(0.05),#cv for chl-a 
+           param_cv = c(0.1, 0.1, 0.1),#for mod params
+           init_cond_cv = c(0.05),#cv for chl-a 
+           state_names = c("chla"),
+           yini = yini)
+#plot forecast output
+plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
+```
+
+    ## Warning: Removed 100 rows containing non-finite values (`stat_ydensity()`).
+
+    ## Warning: Removed 900 rows containing missing values (`geom_point()`).
+
+![](module7_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+
+``` r
+pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
+```
+
+![](module7_files/figure-gfm/unnamed-chunk-22-2.png)<!-- -->
+
+``` r
+rmse(est_out = est_out, lake_data = lake_data)
+```
+
+    ## $rmse_chla
+    ## [1] 0.6122933
+
+### High chl-a assimilation frequency
+
+``` r
+#format observation data file depending on selected frequency of data assimilation
+obs_file <- create_data_assim_inputs(freq_chla = 1,
+                                     lake_data = lake_data,
+                                     start_date = start_date)
+n_en = 100 # how many ensemble members 
+#run the forecast!
+est_out = EnKF(n_en = n_en, 
+           start = '2020-09-25', # start date 
+           stop = '2020-10-05', # stop date
+           time_step = 'days',
+           obs_file = obs_file,
+           n_states_est = 1, 
+           n_params_est = 3,
+           n_params_obs = 0,
+           param_init = c(mod$intercept, mod$ar1, mod$mean), 
+           obs_cv = c(0.05),#cv for chl-a 
+           param_cv = c(0.1, 0.1, 0.1),#for mod params
+           init_cond_cv = c(0.05),#cv for chl-a 
+           state_names = c("chla"),
+           yini = yini)
+#plot forecast output
+plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
+```
+
+    ## Warning: Removed 100 rows containing non-finite values (`stat_ydensity()`).
+
+![](module7_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
+
+``` r
+pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
+```
+
+![](module7_files/figure-gfm/unnamed-chunk-23-2.png)<!-- -->
+
+``` r
+rmse(est_out = est_out, lake_data = lake_data)
+```
+
+    ## $rmse_chla
+    ## [1] 0.4132794
+
+## Objective 9: Explore observation uncertainty
 
 This objective will ask students to adjust the observation uncertainty
 associated with chl-a and nitrate data. The learning outcome of the
@@ -740,7 +963,7 @@ obs_file <- create_data_assim_inputs(freq_chla = 1,
 #run the forecast!
 est_out = EnKF(n_en = n_en, 
            start = '2020-09-25', # start date 
-           stop = '2020-10-29', # stop date
+           stop = '2020-10-05', # stop date
            time_step = 'days',
            obs_file = obs_file,
            n_states_est = 1, 
@@ -753,23 +976,25 @@ est_out = EnKF(n_en = n_en,
            state_names = c("chla"),
            yini = yini)
 #plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data) 
+plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
 ```
 
-![](module7_files/figure-gfm/unnamed-chunk-22-1.png)<!-- -->
+    ## Warning: Removed 100 rows containing non-finite values (`stat_ydensity()`).
+
+![](module7_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
 
 ``` r
 pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
 ```
 
-![](module7_files/figure-gfm/unnamed-chunk-22-2.png)<!-- -->
+![](module7_files/figure-gfm/unnamed-chunk-24-2.png)<!-- -->
 
 ``` r
 rmse(est_out = est_out, lake_data = lake_data)
 ```
 
     ## $rmse_chla
-    ## [1] 0.01048129
+    ## [1] 0.3282424
 
 ### High observation uncertainty
 
@@ -794,102 +1019,10 @@ est_out = EnKF(n_en = n_en,
            state_names = c("chla"),
            yini = yini)
 #plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data) 
+plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
 ```
 
-![](module7_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
-
-``` r
-pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
-```
-
-![](module7_files/figure-gfm/unnamed-chunk-23-2.png)<!-- -->
-
-``` r
-rmse(est_out = est_out, lake_data = lake_data)
-```
-
-    ## $rmse_chla
-    ## [1] 0.534686
-
-## Objective 9: Explore data frequency
-
-This objective asks students to adjust the observation frequency (and
-therefore the assimilation frequency) of chl-a data. The learning
-outcome of the objective is for students to understand that more
-frequent data assimilation may permit for more accurate forecasts, as
-models closely track real-world conditions. Below are two examples: one
-where chla is assimilated low frequency (every 14 days) and one where
-chl-a is assimilated at high frequency (daily).
-
-### Low chl-a assimilation frequency
-
-``` r
-#format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 14,
-                                     lake_data = lake_data,
-                                     start_date = start_date)
-n_en = 100 # how many ensemble members 
-#run the forecast!
-est_out = EnKF(n_en = n_en, 
-           start = '2020-09-25', # start date 
-           stop = '2020-10-29', # stop date
-           time_step = 'days',
-           obs_file = obs_file,
-           n_states_est = 1, 
-           n_params_est = 3,
-           n_params_obs = 0,
-           param_init = c(mod$intercept, mod$ar1, mod$mean), 
-           obs_cv = c(0.05),#cv for chl-a 
-           param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.1),#cv for chl-a 
-           state_names = c("chla"),
-           yini = yini)
-#plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data) 
-```
-
-![](module7_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
-
-``` r
-pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
-```
-
-![](module7_files/figure-gfm/unnamed-chunk-24-2.png)<!-- -->
-
-``` r
-rmse(est_out = est_out, lake_data = lake_data)
-```
-
-    ## $rmse_chla
-    ## [1] 1.079613
-
-### High chl-a assimilation frequency
-
-``` r
-#format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 1,
-                                     lake_data = lake_data,
-                                     start_date = start_date)
-n_en = 100 # how many ensemble members 
-#run the forecast!
-est_out = EnKF(n_en = n_en, 
-           start = '2020-09-25', # start date 
-           stop = '2020-10-29', # stop date
-           time_step = 'days',
-           obs_file = obs_file,
-           n_states_est = 1, 
-           n_params_est = 3,
-           n_params_obs = 0,
-           param_init = c(mod$intercept, mod$ar1, mod$mean), 
-           obs_cv = c(0.05),#cv for chl-a 
-           param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.1),#cv for chl-a 
-           state_names = c("chla"),
-           yini = yini)
-#plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data) 
-```
+    ## Warning: Removed 100 rows containing non-finite values (`stat_ydensity()`).
 
 ![](module7_files/figure-gfm/unnamed-chunk-25-1.png)<!-- -->
 
@@ -904,6 +1037,6 @@ rmse(est_out = est_out, lake_data = lake_data)
 ```
 
     ## $rmse_chla
-    ## [1] 0.1524826
+    ## [1] 0.8137359
 
 Footer
