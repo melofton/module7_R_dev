@@ -5,21 +5,133 @@ date: "`r Sys.Date()`"
 output:
   github_document: default
 ---
-## Set-up (not shown)
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
+
+## Purpose of this R Markdown
+
+This R Markdown contains code to reproduce the basic functionality of "Macrosystems EDDIE Module 7: Using Data to Improve Ecological Forecasts" outside of R Shiny. The code can be used by students to better understand what is happening "under the hood" of the Shiny app, which can be found at the following link:  
+https://macrosystemseddie.shinyapps.io/module7/. 
+
+Alternatively, students can complete this version of the module instead of the Shiny app version. 
+
+## Summary
+
+Focal question for this module:   
+**How can we use data to improve ecological forecasts?**
+
+To be useful for management, ecological forecasts need to be both accurate enough for managers to be able to rely on them for decision-making and include a representation of forecast uncertainty, so managers can properly interpret the probability of future events. To improve forecast accuracy, we can update forecasts with observational data once they become available, a process known as **data assimilation.** Recent improvements in environmental sensor technology and an increase in the number of sensors deployed in ecosystems have resulted in an increase in the availability of data for assimilation to help develop and improve forecasts for natural resource management. In this module, you will develop an autoregressive model of primary productivity and use the model to generate forecasts. You will then explore how assimilating data at different temporal frequencies (e.g., daily, weekly) and with different levels of observation uncertainty affects forecast accuracy. 
+
+## Learning Outcomes
+1. Define data assimilation.    
+2. Generate an ecological forecast for primary productivity.    
+3. Describe how to assess ecological forecast accuracy.     
+4. Describe how data assimilation affects forecast accuracy and uncertainty.    
+5. Explain how updating models with data collected at different time scales (e.g., daily, weekly) and with different levels of associated uncertainty affects ecological forecasts.     
+
+## Key Concepts
+
+### What is data assimilation?
+
+Data assimilation is the process of updating models with data. In ecological forecasting, data assimilation is the process of updating ecological forecasting models with new environmental data as they become available.
+
+### How does the amount of uncertainty in model predictions and data affect the process of data assimilation?
+
+The amount of uncertainty in model predictions and data determines how much we adjust our forecasts based on new observations. If we observe a new data point and we have low observation uncertainty, our forecast starting conditions will be adjusted to closely correspond to the new observation. If we observe a new data point and we have high observation uncertainty, our forecast starting conditions will not be adjusted as much.
+
+### How does the frequency of observations affect data assimilation?
+
+More frequent observations allow us to update our forecast models more often, potentially improving forecast accuracy.
+
+## Overview
+
+In this module, we will generate forecasts of lake chlorophyll-a for 1-10 days into the future. First, we will generate a 10-day forecast that does not assimilate any data. This will involve the following steps:  
+
+1. Read in and visualize chlorophyll-a data from Lake Barco, FL, USA.  
+2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
+3. Fit an autoregressive forecast model.   
+4. Generate a distribution of forecast **initial conditions** (starting conditions). 
+5. Generate a 10-day forecast with no data assimilation. 
+6. Assess forecast accuracy.    
+
+Next, we will explore the effect of **data assimilation** on forecast accuracy by conducting two data assimilation experiments. First, we will assimilate data at different temporal frequencies (e.g., daily vs. weekly) and assess the effect on forecast accuracy. Second, we will assimilate data with different levels of observation uncertainty (e.g., high vs. low observation uncertainty) and assess the effect on forecast accuracy. 
+
+7. Assimilate data at frequencies ranging from once a week to once a day.    
+8. Assess the effect of data assimilation frequency on forecast accuracy.    
+9. Assimilate data with different levels of observation uncertainty.   
+10. Assess the effect of observation uncertainty on forecast accuracy.   
+
+Finally, you will be asked to summarize what you have learned about how to use data to improve ecological forecasts, and explain how data assimilation frequency and observation uncertainty are likely to affect forecast accuracy.
+
+There are a total of XX questions embedded throughout this module, many of which parallel (and in some cases are identical to) questions in the R Shiny app version of the module. Questions which are identical to those in the Shiny app will be indicated with **(Shiny)**, while questions unique to this RMarkdown will be indicated with **(Rmd)**. Note that question numbers will differ between the RMarkdown and the Shiny app, even if the question text is the same. Please see the module rubric for possible points per question and confirm with your instructor whether and how the module will be graded.  
+
+## Think About It!
+
+**Q.1 (Shiny)** What is meant by the term 'data assimilation' in the context of ecological forecasting?
+
+**Answer Q.1**
+
+
+
+**Q.2 (Shiny)** How do you think the process of integrating the most recently observed data into models can improve forecasts?
+
+**Answer Q.2**
+
+
+## Set-up
+
+We will install and load some packages and functions that are needed to run the module code. If you do not currently have the packages below downloaded for RStudio, you will need to install them first using the `install.packages()` function.
 
 ```{r, echo=FALSE, message = FALSE, warning=FALSE}
-# Load libraries ----
-library(ggplot2)
-library(plotly)
+# install.packages("tidyverse")
+# install.packages("lubridate")
+# install.packages("mvtnorm")
+# install.packages("zoo")
 library(tidyverse)
 library(lubridate)
 library(mvtnorm)
-library(ncdf4)
 library(zoo)
+
+source("./Rmd_functions.R")
 ```
+
+## 1. Read in and visualize data from Lake Barco, FL, USA
+
+Lake Barco is one of the lake sites in the U.S. National Ecological Observatory Network (NEON). Please refer to https://www.neonscience.org/field-sites/barc to learn more about this site.
+
+**Q.3 (Shiny)** Use the website linked above to fill out information about Lake Barco:
+
+**Answer Q.3**
+
+Four letter site identifier:  
+Latitude:  
+Longitude:  
+Lake area (km2):  
+Elevation (m):  
+
+## Chlorophyll-a in lakes
+
+insert section here about why chl-a matters
+
+**Q.4 chl-a**
+
+**Answer Q.4**
+
+
+
+Read in and view lake chlorophyll-a data. We will eliminate rows with missing chlorophyll-a observations and also rename the columns of our dataframe.
+```{r}
+lake_data <- read_csv("./data/neon/BARC_chla_microgramsPerLiter.csv", show_col_types = FALSE) %>%
+  rename(datetime = Date, chla = V1) %>%
+  filter(!is.na(chla))
+
+head(lake_data)
+```
+
+Plot a timeseries of chlorophyll-a observations at Lake Barco.
+```{r}
+plot_chla_obs(lake_data)
+```
+
+## 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
 
 
 ## Objective 7: Assimilate data  

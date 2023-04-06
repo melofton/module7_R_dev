@@ -15,43 +15,17 @@ library(zoo)
 
 ### NEON data functions----
 
-#### Function to read in NEON data----
-# Read in NEON data 
-#' @param siteID character; four-letter identifier for the NEON site
-#' @param var character; short name used to identify NEON variables. See "data/neon_variables.csv"
-read_neon_data <- function(siteID, var) {
-  idx <- which(neon_vars$Short_name == var)
-  read_var <- neon_vars$id[idx]
-  units <- neon_vars$units[idx]
-  file <- file.path("data","neon", paste0(siteID, "_", read_var, "_", units, ".csv"))
-  if(file.exists(file)) {
-    df <- read.csv(file)
-    df[, 1] <- as.POSIXct(df[, 1], tz =  "UTC")
-    colnames(df)[2] <- "value"
-    df$var <- neon_vars$id[idx]
-    return(df)
-  } else {
-    stop("File: '", file, "' does not exist.")
-  }
-}
-
-#### Function to format NEON data for input to EnKF----
-#' pulls in variables needed for selected site and NP model and aggregates them
-#'
-#' @param siteID name of NEON lake site
-#' @param neon_vars table of NEON variables available at lake sites; needed because of call to nested read_neon_data function
-load_lake_data <- function(siteID, neon_vars){
-  
-  #States
-  chla <- read_neon_data(siteID, "Chlorophyll-a") %>%
-    rename(chla = value) %>%
-    select(Date,chla) %>%
-    rename(datetime = Date) %>%
-    mutate(chla = log(chla + 0.001))
-  
-  lake_data <- chla
-  
-  return(lake_data)
+#### Function to plot NEON chl-a data----
+# Plot chl-a data 
+#' @param lake_data NEON lake dataset that has been formatted using the format_enkf_inputs function
+plot_chla_obs <- function(lake_data){
+  p <- ggplot(data = lake_data, aes(x = datetime, y = chla))+
+    geom_line(aes(color = "Chl-a"))+
+    xlab("")+
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    scale_color_manual(values = c("Chl-a" = "chartreuse4"), name = "")+
+    theme_bw()
+  return(p)
 }
 
 #### Function to create input dataset for various frequencies of data assimilation----
