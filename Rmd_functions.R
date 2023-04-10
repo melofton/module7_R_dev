@@ -34,12 +34,12 @@ plot_chla_obs <- function(lake_data){
 #' @param freq_din frequency of din data assimilation in days between 1-30
 #' @param lake_data NEON lake dataset that has been formatted using the format_enkf_inputs function
 #' @param start_date start date of forecast (either 2020-09-25 or 2020-10-02)
-create_data_assim_inputs <- function(freq_chla, lake_data, start_date){
+create_data_assim_inputs <- function(chla_assimilation_frequency, lake_data, start_date){
   
   dates <- get_model_dates(as.Date(start_date), as.Date(start_date)+35, time_step = 'days')
   
   a <- 1:35
-  b1 <- a[seq(1, length(a), freq_chla)]
+  b1 <- a[seq(1, length(a), chla_assimilation_frequency)]
   
   out <- lake_data %>%
     select(datetime, chla) %>%
@@ -101,18 +101,34 @@ fit_AR_model <- function(lake_data, start_date){
 #### Function to predict with AR model----
 #' @param mod fitted AR model object
 #' @param chla initial conditions of chla
-pred_AR_model <- function(mod, chla){
+pred_AR_model <- function(ar_model, chla){
   
-  c = mod$intercept
-  ar1 = mod$ar1
-  chla_mean = mod$mean
+  ar1 = as.numeric(ar_model$ar)
+  chla_mean = as.numeric(ar_model$x.mean)
+  intercept = as.numeric(ar_model$x.intercept)
   
-  chla_pred <- c + ar1 * (chla - chla_mean) + chla_mean
+  chla_pred <- intercept + ar1 * (chla - chla_mean) + chla_mean
   
   return(list(chla_pred = chla_pred,
-              c = c,
+              intercept = intercept,
               ar1 = ar1,
               chla_mean = chla_mean))
+}
+
+mod_predictions_chla <- function(model_fit_plot_data){
+  cols <- RColorBrewer::brewer.pal(8, "Dark2") # Set custom color palette for our plot - ooh we are fancy!! :-)
+  
+  ggplot(data = model_fit_plot_data) +
+    geom_point(aes(date, chla, color = "Observed")) +
+    geom_line(aes(date, model, color = "Modeled")) +
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")"))) +
+    xlab("Time") +
+    scale_color_manual(values = c( "Observed" = "black", "Modeled" = cols[4]),
+                       name = "",
+                       guide = guide_legend(override.aes = list(
+                         linetype = c("solid","blank"),
+                         shape = c(NA,16)))) +
+    theme_bw(base_size = 12) 
 }
 
 ### ENKF functions from Jake Zwart GLEON workshop---
@@ -310,11 +326,11 @@ EnKF = function(n_en = 30,
                 n_params_est = 3,
                 n_params_obs = 0, 
                 param_init = c(mod$intercept, mod$ar1, mod$mean), 
-                obs_cv = c(0.1),
-                param_cv = c(0.1, 0.1, 0.1),
-                init_cond_cv = c(0.1),
+                obs_sd = c(0.1),
+                param_sd = c(0.1, 0.1, 0.1),
                 state_names = c("chla"),
-                yini = yini){
+                yini = yini,
+                model = ar_model){
   
   
   n_en = n_en
@@ -323,6 +339,7 @@ EnKF = function(n_en = 30,
   time_step = 'days' 
   dates = get_model_dates(model_start = start, model_stop = stop, time_step = time_step)
   n_step = length(dates)
+  ar_model = model
   
   # get observation matrix
   obs_df = obs_file %>% 
@@ -339,12 +356,10 @@ EnKF = function(n_en = 30,
   yini <- c( #initial estimate of PHYTO and DIN states, respectively
     chla = yini[1]) #ug/L
   
-  state_cv = obs_cv #coefficient of variation of chla and din observations, respectively 
-  state_sd = state_cv * yini
-  init_cond_sd = init_cond_cv * yini
-  
-  param_cv = param_cv #coefficient of variation of maxUptake 
-  param_sd = abs(param_cv * param_init)
+  #define sds
+  state_sd = obs_sd
+  init_cond_sd = obs_sd
+  param_sd = param_sd
   
   # setting up matrices
   # observations as matrix
@@ -389,13 +404,13 @@ EnKF = function(n_en = 30,
     for(n in 1:n_en){
       
       # run model; 
-      model_output = pred_AR_model(mod = mod, 
+      model_output = pred_AR_model(ar_model = ar_model, 
                                    chla = Y_ic[1, t-1, n])
       
       ######quick hack to add in process error (ha!)########
       
       #specify Y_star (mean of multivariate normal)
-      Y_star = matrix(c(model_output$chla_pred, model_output$c, model_output$ar1,
+      Y_star = matrix(c(model_output$chla_pred, model_output$intercept, model_output$ar1,
                         model_output$chla_mean))
       
       #specify sigma (covariance matrix of states and updating parameters)
@@ -624,5 +639,19 @@ pred_v_obs_chla = function(est_out, lake_data){
   #        code = 3, length = 0.1, angle = 90, col = 'black')
 }
 
-
+plot_ic_dist <- function(curr_chla, ic_uc){
+  
+  #Set colors
+  l.cols <- RColorBrewer::brewer.pal(8, "Set2")[-c(1, 2)] # Defining another custom color palette :-)
+  
+  #Build plot
+  ggplot() +
+    # geom_vline(data = df, aes(xintercept = x, color = label)) +
+    geom_vline(xintercept = curr_chla) +
+    geom_density(aes(ic_uc), fill = l.cols[2], alpha = 0.3) +
+    xlab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")"))) +
+    ylab("Density") +
+    theme_bw(base_size = 18)+
+    ggtitle("Initial condition distribution")
+}
 

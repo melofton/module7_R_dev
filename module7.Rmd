@@ -35,7 +35,7 @@ Data assimilation is the process of updating models with data. In ecological for
 
 ### How does the amount of uncertainty in model predictions and data affect the process of data assimilation?
 
-The amount of uncertainty in model predictions and data determines how much we adjust our forecasts based on new observations. If we observe a new data point and we have low observation uncertainty, our forecast starting conditions will be adjusted to closely correspond to the new observation. If we observe a new data point and we have high observation uncertainty, our forecast starting conditions will not be adjusted as much.
+The amount of uncertainty in model predictions and data determines how much we adjust our forecasts based on new observations. For example, if we observe a new data point and we have low observation uncertainty, our forecast starting conditions will be adjusted to closely correspond to the new observation. If we observe a new data point and we have high observation uncertainty, our forecast starting conditions will not be adjusted as much.
 
 ### How does the frequency of observations affect data assimilation?
 
@@ -48,7 +48,7 @@ In this module, we will generate forecasts of lake chlorophyll-a for 1-10 days i
 1. Read in and visualize chlorophyll-a data from Lake Barco, FL, USA.  
 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
 3. Fit an autoregressive forecast model.   
-4. Generate a distribution of forecast **initial conditions** (starting conditions). 
+4. Specify a distribution of forecast **initial conditions** (starting conditions). 
 5. Generate a 10-day forecast with no data assimilation. 
 6. Assess forecast accuracy.    
 
@@ -117,11 +117,12 @@ insert section here about why chl-a matters
 
 
 
-Read in and view lake chlorophyll-a data. We will eliminate rows with missing chlorophyll-a observations and also rename the columns of our dataframe.
+Read in and view lake chlorophyll-a data. We will rename the columns of our dataframe, and use the `cumsum()` function to filter out several rows with NA chlorophyll-a values at the beginning of our dataset. Here, the `cumsum()` function returns, at each row, the cumulative number of non-NA chl-a values up to that row. This allows us to filter out NA values at the beginning of the dataset, because as soon as the first non-NA chl-a value is observed, the `cumsum()` function will return a value greater than 0.
 ```{r}
 lake_data <- read_csv("./data/neon/BARC_chla_microgramsPerLiter.csv", show_col_types = FALSE) %>%
   rename(datetime = Date, chla = V1) %>%
-  filter(!is.na(chla))
+  filter(cumsum(!is.na(chla)) > 0) %>%
+  mutate(chla = ifelse(chla < 0, 0, chla))
 
 head(lake_data)
 ```
@@ -133,62 +134,130 @@ plot_chla_obs(lake_data)
 
 ## 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
 
-
-## Objective 7: Assimilate data  
-This objective introducees students to data assimilation by asking students to generate multiple sequential 1-day-ahead forecasts:  
-A. using initial conditions based on the most recent chl-a observations but no subsequent data assimilation  
-B. that assimilate chl-a data at a weekly frequency
-
-The desired learning outcome is for students to understand that data assimilation corrects 1-day-ahead model predictions and improves forecast performance as assessed by RMSE calculated for the mean ensemble prediction and observations.   
-
-### Set-up
+What is autocorrelation?
+What is a lag?
+Notice that we are interpolating using na.approx
+Show plot of chla vs chla-lag and ask students if there is a relationship
+Give equation for autocorrelation
+Calculate autocorrelation between chla and chla-lag and ask students to interpret
+What is partial autocorrelation and why are we using that? Don't give equation; just explain that it removes effects of observations between chla and chla at a particular lag and give R function
+Describe pacf function and arguments
+Calculate and plot pacf
+Ask questions about plot interpretation
 ```{r}
-# Load in NEON sites dataframe ----
-neon_sites_df <- read.csv("./neon_sites.csv") %>%
-  filter(type == "Aquatic")
-neon_sites_df$long <- round(neon_sites_df$long, 3)
-neon_sites_df$lat <- round(neon_sites_df$lat, 3)
-# Reference for downloading variables ----
-neon_vars <- read.csv("./neon_variables.csv")
-# Objective 1 - Site Selection ----
-print(neon_sites_df$siteID)
-#we have BARC, CRAM, LIRO, PRLA, PRPO, SUGG, TOOK
-#need to think about which sites we want to use for Mod 7 based on how they behave in app testing
-siteID <- "PRPO"
-#set start date of forecast
-start_date = "2020-09-25" 
-#load NEON data and format for input into EnKF
-lake_data <- format_enkf_inputs(siteID = siteID, neon_vars = neon_vars)
-#get initial conditions for forecast
-yini <- get_yini(lake_data = lake_data,
-                 start_date = start_date)
-#fit AR model
-mod <- fit_AR_model(lake_data = lake_data,
-                    start_date = start_date)
+forecast_start_date <- "2020-09-25"
+
+autocorrelation_data <- lake_data %>%
+    filter(datetime < forecast_start_date) %>%
+    mutate(chla = na.approx(chla, na.rm = F)) %>% 
+    mutate(chla_lag = lag(chla)) %>%
+    filter(complete.cases(.))
+
+ggplot(data = autocorrelation_data, aes(x = chla_lag, y = chla))+
+  geom_point()+
+  theme_bw()
+
+autocorrelation_lag_1 = round(sum((autocorrelation_data$chla - mean(autocorrelation_data$chla))*(autocorrelation_data$chla_lag - mean(autocorrelation_data$chla)))/sum((autocorrelation_data$chla - mean(autocorrelation_data$chla))^2),2)
+
+acf_list <- acf(autocorrelation_data$chla, plot = FALSE)
+
+acf_plot_data <- tibble(Lag = acf_list$lag,
+                        ACF = round(acf_list$acf, 2))
+
+ggplot(data = acf_plot_data, aes(x = Lag, y = ACF))+
+  geom_bar(stat = "identity")+
+  theme_bw()
+
+pacf_list <- acf(autocorrelation_data$chla, type = c("partial"), plot = FALSE)
+
+pacf_plot_data <- tibble(Lag = pacf_list$lag,
+                         Partial_ACF = round(pacf_list$acf, 2))
+
+ggplot(data = pacf_plot_data, aes(x = Lag, y = Partial_ACF))+
+  geom_bar(stat = "identity")+
+  theme_bw()
 ```
-### Run forecast with no data assimilation  
-In this case, inserting 36 as the frequency of chl-a assimilation ensures that only the first observation in the 35 day observation period will be assimilated. If there are no chl-a data available on the start date of the forecast, the get_yini function will pull in the most recent observation prior to the forecast start date as the initial condition for that variable.
+
+## 3. Fit an autoregressive forecast model.   
+Explain ar.ols and why we want to use that function.
+Explain arguments of ar.ols function
+Explain coefficients of model output (give model equation)
+Explain why we are logging chl-a data (to avoid negative values)
+```{r}
+model_data <- autocorrelation_data %>%
+  mutate(log_chla = log(chla + 0.001))
+
+ar_model <- ar.ols(model_data$log_chla, order.max = 1, aic = FALSE,
+                     intercept = TRUE, demean = TRUE)
+ar1 = ar_model$ar
+chla_mean = ar_model$x.mean
+intercept = ar_model$x.intercept
+params_se <- ar_model$asy.se.coef
+
+mod <- pred_AR_model(ar_model = ar_model,
+                     chla = model_data$log_chla)
+
+err <- mean(exp(mod$chla_pred) - model_data$chla, na.rm = TRUE) 
+rmse <- round(sqrt(mean((mod$chla_pred - autocorrelation_data$chla)^2, na.rm = TRUE)), 2)
+
+model_fit_plot_data <- tibble(date = model_data$datetime,
+                              chla = model_data$chla,
+                              model = exp(mod$chla_pred))
+
+mod_predictions_chla(model_fit_plot_data)
+
+```
+## 4. Specify a distribution of forecast **initial conditions** (starting conditions). 
+**Initial conditions** are the starting conditions of your model when you generate a forecast. **Initial conditions uncertainty** refers to uncertainty arising because the initial conditions are not precisely known or because the calculations cannot be performed with the precise initial conditions.
+
+Even though we have measurements of chlorophyll-a from our lake, we know that chlorophyll-a varies throughout the day so this measurement might not capture exactly the chlorophyll-a in our lake at this time. Additionally, there may be observation error in our chlorophyll-a measurements.
+
+To account for initial conditions uncertainty we can generate a distribution around the initial condition of chlorophyll-a and then run our model with slightly different initial conditions.
+
+Generate a distribution of initial conditions for your forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation of 0.5 micrograms per liter (`ic_sd`).
+
+Need to explain rnorm function and arguments
+
+```{r}
+curr_chla <- log(lake_data %>%
+  filter(datetime == forecast_start_date) %>%
+  pull(chla))
+
+high_frequency_data <- # pull in 1 month of sub-daily data in the fall of 2019 from BARCO, group by date and find SD on log scale to inform ic_sd; use code from compiling data for Abhilash's project as starting point
+  
+ic_sd <- 
+ic_uc <- rnorm(n = 1000, mean = curr_chla, sd = ic_sd)
+```
+
+Plot the distribution around your initial condition. 
+
+```{r}
+plot_ic_dist(curr_chla, ic_uc)
+```
+
+## 5. Generate a 10-day forecast with no data assimilation. 
+Right now this needs troubleshooting; I think the issue is that I need to generate a reasonable obs_sd on a log scale for chl-a; see suggested methods for this above
 ```{r}
 #format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 11,
+obs_data <- create_data_assim_inputs(chla_assimilation_frequency = 11,
                                      lake_data = lake_data,
-                                     start_date = start_date)
+                                     start_date = forecast_start_date)
 n_en = 100 # how many ensemble members 
 #run the forecast!
 est_out = EnKF(n_en = n_en, 
            start = '2020-09-25', # start date 
            stop = '2020-10-05', # stop date
            time_step = 'days',
-           obs_file = obs_file,
+           obs_file = obs_data,
            n_states_est = 1, 
            n_params_est = 3,
            n_params_obs = 0,
-           param_init = c(mod$intercept, mod$ar1, mod$mean), 
-           obs_cv = c(0.05),#cv for chl-a 
-           param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.05),#cv for chl-a 
+           param_init = c(intercept, ar1, chla_mean), 
+           obs_sd = ,#sd for chl-a 
+           param_sd = c(0, params_se$ar, params_se$x.mean),#for mod params
            state_names = c("chla"),
-           yini = yini)
+           yini = curr_chla,
+           model = ar_model)
 #plot forecast output
 plot_chla(est_out = est_out, lake_data = lake_data, obs_file = obs_file, start = "2020-09-25", stop = "2020-10-05", n_en = n_en) 
 pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
