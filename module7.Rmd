@@ -87,7 +87,6 @@ We will install and load some packages and functions that are needed to run the 
 # install.packages("zoo")
 library(tidyverse)
 library(lubridate)
-library(mvtnorm)
 library(zoo)
 
 source("./Rmd_functions.R")
@@ -107,7 +106,7 @@ Longitude:
 Lake area (km2):  
 Elevation (m):  
 
-## Chlorophyll-a in lakes
+### Chlorophyll-a in lakes
 
 insert section here about why chl-a matters
 
@@ -134,16 +133,17 @@ plot_chla_obs(lake_data)
 
 ## 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
 
-What is autocorrelation?
-What is a lag?
-Notice that we are interpolating using na.approx
-Show plot of chla vs chla-lag and ask students if there is a relationship
-Give equation for autocorrelation
-Calculate autocorrelation between chla and chla-lag and ask students to interpret
-What is partial autocorrelation and why are we using that? Don't give equation; just explain that it removes effects of observations between chla and chla at a particular lag and give R function
-Describe pacf function and arguments
-Calculate and plot pacf
-Ask questions about plot interpretation
+What is autocorrelation?    
+What is a lag?    
+Notice that we are interpolating using na.approx.   
+Show plot of chla vs chla-lag and ask students if there is a relationship.  
+Give equation for autocorrelation.   
+Calculate autocorrelation between chla and chla-lag and ask students to interpret.   
+What is partial autocorrelation and why are we using that? Don't give equation; just explain that it removes effects of observations between chla and chla at a particular lag and give R function.   
+Describe pacf function and arguments.   
+Calculate and plot pacf.   
+Ask questions about plot interpretation.   
+
 ```{r}
 forecast_start_date <- "2020-09-25"
 
@@ -179,34 +179,41 @@ ggplot(data = pacf_plot_data, aes(x = Lag, y = Partial_ACF))+
 ```
 
 ## 3. Fit an autoregressive forecast model.   
-Explain ar.ols and why we want to use that function.
-Explain arguments of ar.ols function
-Explain coefficients of model output (give model equation)
-Explain why we are logging chl-a data (to avoid negative values)
+
+What is an autoregressive model?   
+Give formula for an autoregressive model, following ar.ols output.  
+Explain ar.ols and why we want to use that function.   
+Explain arguments of ar.ols function.  
+Explain why we are logging chl-a data (to avoid negative values).  
+Ask students to explain, given model function, how chl-a is being predicted.  
+Explain bias and rmse as model assessment metrics.  
+Ask students to assess model fit.  
+
 ```{r}
 model_data <- autocorrelation_data %>%
   mutate(log_chla = log(chla + 0.001))
 
 ar_model <- ar.ols(model_data$log_chla, order.max = 1, aic = FALSE,
                      intercept = TRUE, demean = TRUE)
-ar1 = ar_model$ar
-chla_mean = ar_model$x.mean
-intercept = ar_model$x.intercept
+ar1 = c(ar_model$ar)
+chla_mean = c(ar_model$x.mean)
+intercept = c(ar_model$x.intercept)
 params_se <- ar_model$asy.se.coef
 
-mod <- pred_AR_model(ar_model = ar_model,
-                     chla = model_data$log_chla)
+mod <- intercept + ar1 * (model_data$log_chla - chla_mean) + chla_mean
 
-err <- mean(exp(mod$chla_pred) - model_data$chla, na.rm = TRUE) 
-rmse <- round(sqrt(mean((mod$chla_pred - autocorrelation_data$chla)^2, na.rm = TRUE)), 2)
+residuals <- mod - model_data$log_chla
+err <- mean(exp(mod) - model_data$chla, na.rm = TRUE) 
+rmse <- round(sqrt(mean((exp(mod) - model_data$chla)^2, na.rm = TRUE)), 2)
 
 model_fit_plot_data <- tibble(date = model_data$datetime,
                               chla = model_data$chla,
-                              model = exp(mod$chla_pred))
+                              model = exp(mod))
 
-mod_predictions_chla(model_fit_plot_data)
+plot_mod_predictions_chla(model_fit_plot_data)
 
 ```
+
 ## 4. Specify a distribution of forecast **initial conditions** (starting conditions). 
 **Initial conditions** are the starting conditions of your model when you generate a forecast. **Initial conditions uncertainty** refers to uncertainty arising because the initial conditions are not precisely known or because the calculations cannot be performed with the precise initial conditions.
 
@@ -214,18 +221,23 @@ Even though we have measurements of chlorophyll-a from our lake, we know that ch
 
 To account for initial conditions uncertainty we can generate a distribution around the initial condition of chlorophyll-a and then run our model with slightly different initial conditions.
 
-Generate a distribution of initial conditions for your forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation of 0.5 micrograms per liter (`ic_sd`).
+Explain that we will be using high-frequency data from the previous year to get an estimate of our initial conditions uncertainty.
 
 Need to explain rnorm function and arguments
+
+Generate a distribution of initial conditions for your forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation in units of log(ug/L) calculated from high-frequency data from Lake Barco (`ic_sd`).
 
 ```{r}
 curr_chla <- log(lake_data %>%
   filter(datetime == forecast_start_date) %>%
   pull(chla))
 
-high_frequency_data <- # pull in 1 month of sub-daily data in the fall of 2019 from BARCO, group by date and find SD on log scale to inform ic_sd; use code from compiling data for Abhilash's project as starting point
+high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
+  mutate(date = date(datetime)) %>%
+  group_by(date) %>%
+  summarize(daily_sd_chla = sd(log(chla), na.rm = TRUE))
   
-ic_sd <- 
+ic_sd <- mean(high_frequency_data$daily_sd_chla, na.rm = TRUE)
 ic_uc <- rnorm(n = 1000, mean = curr_chla, sd = ic_sd)
 ```
 
@@ -236,176 +248,266 @@ plot_ic_dist(curr_chla, ic_uc)
 ```
 
 ## 5. Generate a 10-day forecast with no data assimilation. 
-Right now this needs troubleshooting; I think the issue is that I need to generate a reasonable obs_sd on a log scale for chl-a; see suggested methods for this above
+
+Here we will generate a series of 1-day-ahead forecasts. In other words, imagine that these forecasts are generated once per day, and every day, the forecast makes a prediction for tomorrow. We will "give" the forecast model a chlorophyll-a observation from Lake Barco that will be used as the initial condition for the first forecast. But after that, we will not provide any additional observations for additional forecasts. This could happen if, for example, a sensor malfunctioned and you were unable to collect data, or if you did not have a high-frequency sensor and were only able to collect 1-2 observations per month. In the absence of additional observations, the daily forecast model will simply use yesterday's forecast as the initial condition for today's forecast.
+
+Explain each of the arguments to the EnKF in very simple terms (e.g., we need to provide the residuals of our model fit so we can account for uncertainty due to limitations in how well our model predicts chl-a)
+
+Ask students to interpret plot.
+
 ```{r}
+#set forecast horizon in days
+forecast_horizon = 10
+
 #format observation data file depending on selected frequency of data assimilation
-obs_data <- create_data_assim_inputs(chla_assimilation_frequency = 11,
-                                     lake_data = lake_data,
-                                     start_date = forecast_start_date)
-n_en = 100 # how many ensemble members 
+forecast_dates <- seq.Date(from = as.Date(forecast_start_date), to = as.Date(forecast_start_date) + forecast_horizon, by = 'days')
+
+#set chlorophyll-a assimilation frequency
+chla_assimilation_frequency = 11
+  
+#create forecast data dataframe - ugh this needs simplified
+  a <- c(1:forecast_horizon)
+  b1 <- a[seq(1, length(a), chla_assimilation_frequency)]
+  
+  forecast_data <- lake_data %>%
+    select(datetime, chla) %>%
+    mutate(datetime = as.Date(datetime),
+           chla = log(chla)) %>%
+    filter(datetime %in% forecast_dates) %>%
+    mutate(rownum = row_number(datetime)) %>%
+    mutate(chla = ifelse(rownum %in% b1,chla,NA)) %>%
+    select(-rownum)
+
+
+n_en = 200 # how many ensemble members 
 #run the forecast!
-est_out = EnKF(n_en = n_en, 
-           start = '2020-09-25', # start date 
-           stop = '2020-10-05', # stop date
-           time_step = 'days',
-           obs_file = obs_data,
-           n_states_est = 1, 
-           n_params_est = 3,
-           n_params_obs = 0,
-           param_init = c(intercept, ar1, chla_mean), 
-           obs_sd = ,#sd for chl-a 
-           param_sd = c(0, params_se$ar, params_se$x.mean),#for mod params
-           state_names = c("chla"),
-           yini = curr_chla,
-           model = ar_model)
+est_out = forecast_with_EnKF(n_en = n_en, 
+                             start = forecast_start_date, # start date 
+                             stop = last(forecast_dates), # stop date
+                             obs_file = forecast_data,
+                             obs_sd = ic_sd, 
+                             yini = curr_chla,
+                             model = ar_model,
+                             residuals = residuals)
 #plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data, obs_file = obs_file, start = "2020-09-25", stop = "2020-10-05", n_en = n_en) 
-pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
-rmse(est_out = est_out, lake_data = lake_data)
-```
-### Run forecast with chl-a data assimilated every week  
-Notice that the freq_chla argument in the create_data_assim_inputs file has been adjusted to 7. If chl-a data is not available on the 7th, 14th, 21st.... days, the value for that day will be NA and the forecast function will proceed without assimilating chl-a data for that day.
-```{r}
-#format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 4,
-                                     lake_data = lake_data,
-                                     start_date = start_date)
-n_en = 100 # how many ensemble members 
-#run the forecast!
-est_out = EnKF(n_en = n_en, 
-           start = '2020-09-25', # start date 
-           stop = '2020-10-05', # stop date
-           time_step = 'days',
-           obs_file = obs_file,
-           n_states_est = 1, 
-           n_params_est = 3,
-           n_params_obs = 0,
-           param_init = c(mod$intercept, mod$ar1, mod$mean), 
-           obs_cv = c(0.05),#cv for chl-a 
-           param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.05),#cv for chl-a 
-           state_names = c("chla"),
-           yini = yini)
-#plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
-pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
-rmse(est_out = est_out, lake_data = lake_data)
+plot_chla(est_out = est_out, lake_data = lake_data, obs_file = forecast_data, start = forecast_start_date, stop = last(forecast_dates), n_en = n_en) 
 ```
 
-## Objective 8: Explore data frequency
-This objective asks students to adjust the observation frequency (and therefore the assimilation frequency) of chl-a data. The learning outcome of the objective is for students to understand that more frequent data assimilation may permit for more accurate forecasts, as models closely track real-world conditions. Below are two examples: one where chla is assimilated low frequency (every 7 days) and one where chl-a is assimilated at high frequency (daily).  
+## 6. Assess forecast accuracy.    
 
-### Low chl-a assimilation frequency
+Ask students to interpret pred vs obs plot.  
+Ask students to interpret forecast assessment metrics (bias and RMSE).  
 ```{r}
-#format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 7,
-                                     lake_data = lake_data,
-                                     start_date = start_date)
-n_en = 100 # how many ensemble members 
-#run the forecast!
-est_out = EnKF(n_en = n_en, 
-           start = '2020-09-25', # start date 
-           stop = '2020-10-05', # stop date
-           time_step = 'days',
-           obs_file = obs_file,
-           n_states_est = 1, 
-           n_params_est = 3,
-           n_params_obs = 0,
-           param_init = c(mod$intercept, mod$ar1, mod$mean), 
-           obs_cv = c(0.05),#cv for chl-a 
-           param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.05),#cv for chl-a 
-           state_names = c("chla"),
-           yini = yini)
-#plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
+#assess forecast
 pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
-rmse(est_out = est_out, lake_data = lake_data)
+
+forecast = exp(apply(est_out$Y_pred[1,,] , 1, FUN = mean))
+
+#limit obs to forecast dates
+  forecast_obs <- lake_data %>%
+    mutate(datetime = as.Date(datetime)) %>%
+    filter(datetime %in% est_out$dates) 
+  
+#calculate bias
+err <- mean(forecast - forecast_obs$chla, na.rm = TRUE) 
+#calculate RMSE
+rmse <- sqrt(mean((forecast_obs$chla - forecast)^2, na.rm = TRUE))
 ```
 
-### High chl-a assimilation frequency
+## 7. Assimilate data at frequencies ranging from once a week to once a day.    
+
+Now we will conduct an experiment to address the following question: if we had more frequent observations available to update our forecast initial conditions, how would that affect our forecast accuracy? To complete this experiment, we will generate forecasts while assimilating observations at different temporal frequencies, ranging from once a week to every day. Then, we will compare whether and how forecasts accuracy changes when we have infrequent (e.g., weekly) vs. frequent (e.g., daily) to update our forecast initial conditions.
+
+Explain for-loop structure: looping through chla_assimilation_frequencies.  
+What student questions should be included here, or should this be combined with the next section?   
+
 ```{r}
+#set forecast horizon in days
+forecast_horizon = 10
+
 #format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 1,
-                                     lake_data = lake_data,
-                                     start_date = start_date)
-n_en = 100 # how many ensemble members 
+forecast_dates <- seq.Date(from = as.Date(forecast_start_date), to = as.Date(forecast_start_date) + forecast_horizon, by = 'days')
+
+#define chlorophyll-a assimilation frequency vector - once a week to once a day
+chla_assimilation_frequencies = c(7:1)
+
+#make empty list for DA frequency experiment output
+da_frequency_experiment_output <- list()
+
+for(i in 1:length(chla_assimilation_frequencies)){
+  
+#create forecast data dataframe
+  a <- c(1:forecast_horizon)
+  b1 <- a[seq(1, length(a), chla_assimilation_frequencies[i])]
+  
+  forecast_data <- lake_data %>%
+    select(datetime, chla) %>%
+    mutate(datetime = as.Date(datetime),
+           chla = log(chla)) %>%
+    filter(datetime %in% forecast_dates) %>%
+    mutate(rownum = row_number(datetime)) %>%
+    mutate(chla = ifelse(rownum %in% b1,chla,NA)) %>%
+    select(-rownum)
+
+
+n_en = 200 # how many ensemble members 
 #run the forecast!
-est_out = EnKF(n_en = n_en, 
-           start = '2020-09-25', # start date 
-           stop = '2020-10-05', # stop date
-           time_step = 'days',
-           obs_file = obs_file,
-           n_states_est = 1, 
-           n_params_est = 3,
-           n_params_obs = 0,
-           param_init = c(mod$intercept, mod$ar1, mod$mean), 
-           obs_cv = c(0.05),#cv for chl-a 
-           param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.05),#cv for chl-a 
-           state_names = c("chla"),
-           yini = yini)
-#plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
-pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
-rmse(est_out = est_out, lake_data = lake_data)
+da_frequency_experiment_output[[i]] = forecast_with_EnKF(n_en = n_en, 
+                             start = forecast_start_date, # start date 
+                             stop = last(forecast_dates), # stop date
+                             obs_file = forecast_data,
+                             obs_sd = ic_sd, 
+                             yini = curr_chla,
+                             model = ar_model,
+                             residuals = residuals)
+names(da_frequency_experiment_output)[[i]] <- paste0(chla_assimilation_frequencies[i],"_days")
+
+}
 ```
 
-## Objective 9: Explore observation uncertainty  
-This objective will ask students to adjust the observation uncertainty associated with chl-a and nitrate data. The learning outcome of the objective is for students to understand that the amount of uncertainty associated with observations determines how much the model corrects itself to align with those observations. Below are two examples: one when observation uncertainty for both variables is low, and one when it is high.  
+## 8. Assess the effect of data assimilation frequency on forecast accuracy.
 
-### Low observation uncertainty
+Now that we have completed our data assimilation frequency experiment, we need to assess the results
+
 ```{r}
-#format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 1,
-                                     lake_data = lake_data,
-                                     start_date = start_date)
-#run the forecast!
-est_out = EnKF(n_en = n_en, 
-           start = '2020-09-25', # start date 
-           stop = '2020-10-05', # stop date
-           time_step = 'days',
-           obs_file = obs_file,
-           n_states_est = 1, 
-           n_params_est = 3,
-           n_params_obs = 0,
-           param_init = c(mod$intercept, mod$ar1, mod$mean), 
-           obs_cv = c(0.01),#cv for chl-a 
-           param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.01),#cv for chl-a 
-           state_names = c("chla"),
-           yini = yini)
+#plot and assess weekly DA
 #plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
-pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
-rmse(est_out = est_out, lake_data = lake_data)
-```
-### High observation uncertainty
-```{r}
-#format observation data file depending on selected frequency of data assimilation
-obs_file <- create_data_assim_inputs(freq_chla = 1,
-                                     lake_data = lake_data,
-                                     start_date = start_date)
-#run the forecast!
-est_out = EnKF(n_en = n_en, 
-           start = '2020-09-25', # start date 
-           stop = '2020-10-29', # stop date
-           time_step = 'days',
-           obs_file = obs_file,
-           n_states_est = 1, 
-           n_params_est = 3,
-           n_params_obs = 0,
-           param_init = c(mod$intercept, mod$ar1, mod$mean), 
-           obs_cv = c(0.2),#cv for chl-a 
-           param_cv = c(0.1, 0.1, 0.1),#for mod params
-           init_cond_cv = c(0.2),#cv for chl-a 
-           state_names = c("chla"),
-           yini = yini)
+plot_chla(est_out = da_frequency_experiment_output[[1]], lake_data = lake_data, obs_file = da_frequency_experiment_output[[1]]$obs_file, start = forecast_start_date, stop = last(forecast_dates), n_en = n_en)
+
+#assess forecast
+pred_v_obs_chla(est_out = da_frequency_experiment_output[[1]], lake_data = lake_data)
+
+forecast = exp(apply(da_frequency_experiment_output[[1]]$Y_pred[1,,] , 1, FUN = mean))
+
+#limit obs to forecast dates
+  forecast_obs <- lake_data %>%
+    mutate(datetime = as.Date(datetime)) %>%
+    filter(datetime %in% da_frequency_experiment_output[[1]]$dates) 
+  
+#calculate bias
+err <- mean(forecast - forecast_obs$chla, na.rm = TRUE) 
+#calculate RMSE
+rmse <- sqrt(mean((forecast_obs$chla - forecast)^2, na.rm = TRUE))
+
+#plot and assess daily DA
 #plot forecast output
-plot_chla(est_out = est_out, lake_data = lake_data, start = "2020-09-25", stop = "2020-10-05", n_en = n_en, obs_file = obs_file) 
-pred_v_obs_chla(est_out = est_out, lake_data = lake_data)
-rmse(est_out = est_out, lake_data = lake_data)
+plot_chla(est_out = da_frequency_experiment_output[[7]], lake_data = lake_data, obs_file = da_frequency_experiment_output[[7]]$obs_file, start = forecast_start_date, stop = last(forecast_dates), n_en = n_en)
+
+#assess forecast
+pred_v_obs_chla(est_out = da_frequency_experiment_output[[7]], lake_data = lake_data)
+
+forecast = exp(apply(da_frequency_experiment_output[[7]]$Y_pred[1,,] , 1, FUN = mean))
+
+#limit obs to forecast dates
+  forecast_obs <- lake_data %>%
+    mutate(datetime = as.Date(datetime)) %>%
+    filter(datetime %in% da_frequency_experiment_output[[7]]$dates) 
+  
+#calculate bias
+err <- mean(forecast - forecast_obs$chla, na.rm = TRUE) 
+#calculate RMSE
+rmse <- sqrt(mean((forecast_obs$chla - forecast)^2, na.rm = TRUE))
+
+
+#money plot of all DA frequencies vs rmse
+plot_da_frequency_experiment_results(da_frequency_experiment_output,
+                                     chla_assimilation_frequencies)
 ```
 
+## 9. Assimilate data with different levels of observation uncertainty.
 
-Footer
+```{r}
+#set forecast horizon in days
+forecast_horizon = 10
+
+#format observation data file depending on selected frequency of data assimilation
+forecast_dates <- seq.Date(from = as.Date(forecast_start_date), to = as.Date(forecast_start_date) + forecast_horizon, by = 'days')
+
+#define observation uncertainty vector, with values both above and below empirically calculated observation uncertainty
+obs_uncertainty = c(0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05)
+  
+#define chl-a assimilation frequency
+chla_assimilation_frequency = 1
+
+#create forecast data dataframe
+  a <- c(1:forecast_horizon)
+  b1 <- a[seq(1, length(a), chla_assimilation_frequency)]
+  
+  forecast_data <- lake_data %>%
+    select(datetime, chla) %>%
+    mutate(datetime = as.Date(datetime),
+           chla = log(chla)) %>%
+    filter(datetime %in% forecast_dates) %>%
+    mutate(rownum = row_number(datetime)) %>%
+    mutate(chla = ifelse(rownum %in% b1,chla,NA)) %>%
+    select(-rownum)
+  
+n_en = 200 # how many ensemble members 
+
+
+#make empty list for DA frequency experiment output
+obs_uncertainty_experiment_output <- list()
+
+for(i in 1:length(obs_uncertainty)){
+
+#run the forecast!
+obs_uncertainty_experiment_output[[i]] = forecast_with_EnKF(n_en = n_en, 
+                             start = forecast_start_date, # start date 
+                             stop = last(forecast_dates), # stop date
+                             obs_file = forecast_data,
+                             obs_sd = obs_uncertainty[i], 
+                             yini = curr_chla,
+                             model = ar_model,
+                             residuals = residuals)
+names(obs_uncertainty_experiment_output)[[i]] <- paste0(obs_uncertainty[i],"_log_ugL")
+
+}
+```
+
+
+## 10. Assess the effect of observation uncertainty on forecast accuracy. 
+
+```{r}
+#plot and assess weekly DA
+#plot forecast output
+plot_chla(est_out = obs_uncertainty_experiment_output[[1]], lake_data = lake_data, obs_file = obs_uncertainty_experiment_output[[1]]$obs_file, start = forecast_start_date, stop = last(forecast_dates), n_en = n_en)
+
+#assess forecast
+pred_v_obs_chla(est_out = obs_uncertainty_experiment_output[[1]], lake_data = lake_data)
+
+forecast = exp(apply(obs_uncertainty_experiment_output[[1]]$Y_pred[1,,] , 1, FUN = mean))
+
+#limit obs to forecast dates
+  forecast_obs <- lake_data %>%
+    mutate(datetime = as.Date(datetime)) %>%
+    filter(datetime %in% obs_uncertainty_experiment_output[[1]]$dates) 
+  
+#calculate bias
+err <- mean(forecast - forecast_obs$chla, na.rm = TRUE) 
+#calculate RMSE
+rmse <- sqrt(mean((forecast_obs$chla - forecast)^2, na.rm = TRUE))
+
+#plot and assess daily DA
+#plot forecast output
+plot_chla(est_out = obs_uncertainty_experiment_output[[10]], lake_data = lake_data, obs_file = obs_uncertainty_experiment_output[[10]]$obs_file, start = forecast_start_date, stop = last(forecast_dates), n_en = n_en)
+
+#assess forecast
+pred_v_obs_chla(est_out = obs_uncertainty_experiment_output[[10]], lake_data = lake_data)
+
+forecast = exp(apply(obs_uncertainty_experiment_output[[10]]$Y_pred[1,,] , 1, FUN = mean))
+
+#limit obs to forecast dates
+  forecast_obs <- lake_data %>%
+    mutate(datetime = as.Date(datetime)) %>%
+    filter(datetime %in% obs_uncertainty_experiment_output[[10]]$dates) 
+  
+#calculate bias
+err <- mean(forecast - forecast_obs$chla, na.rm = TRUE) 
+#calculate RMSE
+rmse <- sqrt(mean((forecast_obs$chla - forecast)^2, na.rm = TRUE))
+
+
+#money plot of all DA frequencies vs rmse
+plot_obs_uncertainty_experiment_results(obs_uncertainty_experiment_output,
+                                     obs_uncertainty)
+```
