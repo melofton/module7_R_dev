@@ -260,68 +260,198 @@ ggplot(data = acf_plot_data, aes(x = Lag, y = ACF))+
 **Answer Q. 11**
  
 
+As you may have discovered while answering Q.11, it can be difficult to decide exactly how many lags to include in a forecasting model. Fortunately, forecasters have developed tools to help make this decision. One such tool is the **partial autocorrelation function**, or **PACF**. This function calculates the autocorrelation of a particular lag *while removing* the effects of indirect correlations with other lags. 
 
+To explain another way: the **autocorrelation** of chlorophyll-a and the 7-day lag of chlorophyll-a is affected by the autocorrelation of chlorophyll-a with the 1-day lag, 2-day lag autocorrelation, the 3-day lag, and so on.... as well as the relationship of the 7-day lag to the 1-day lag, the 2-day lag, the 3-day lag, and so on.....
 
-What is partial autocorrelation and why are we using that? Don't give equation; just explain that it removes effects of observations between chla and chla at a particular lag and give R function.   
-Describe pacf function and arguments.   
-Calculate and plot pacf.   
-Ask questions about plot interpretation.   
+The PACF avoids this problem. You can think of it as only measuring the effect of one particular set of lagged values (e.g., the 5-day lagged values), while accounting for (and thereby removing the influence of) all other lags.
 
+To calculate the PACF, we can use the same `acf()` function, while adding the argument `type = c("partial")` to indicate that we'd like to calculate the partial autocorrelation function. 
 ```{r}
-pacf_list <- acf(autocorrelation_data$chla, type = c("partial"), plot = FALSE)
+pacf_list <- acf(autocorrelation_data$chla, type = c("partial"), plot = TRUE)
 
 pacf_plot_data <- tibble(Lag = pacf_list$lag,
                          Partial_ACF = round(pacf_list$acf, 2))
-
+head(pacf_plot_data)
+```
+Now, we can plot the PACF.
+```{r}
 ggplot(data = pacf_plot_data, aes(x = Lag, y = Partial_ACF))+
   geom_bar(stat = "identity")+
+  xlab("Lag in days")+
+  ylab("Partial autocorrelation")+
   theme_bw()
 ```
+**Q.12 Examine the PACF plot. Which lag contributes the most to autocorrelation in the Lake Barco chlorophyll-a data? Explain how you know.**
+
+**Answer Q. 11**
+
+
+
+**Q.13 Once again, imagine you are asked to develop a forecasting model that uses lagged values of chlorophyll-a to predict future chlorophyll-a. Examining the PACF plot above, how many lags of chlorophyll-a would you include in your forecasting model? Provide your answer in days (e.g., I would include up to a 3-day lag) and explain your reasoning.**
+
+**Answer Q. 13**
+
+
+
+
+**Q.14 Did the number of lags you chose to include in your forecasting model change from Q.11 to Q.13? Why or why not?**
+
+**Answer Q. 14**
+
+
+
 
 ## 3. Fit an autoregressive forecast model.   
 
-What is an autoregressive model?   
-Give formula for an autoregressive model, following ar.ols output.  
-Explain ar.ols and why we want to use that function.   
-Explain arguments of ar.ols function.  
-Explain why we are logging chl-a data (to avoid negative values).  
-Ask students to explain, given model function, how chl-a is being predicted.  
-Explain bias and rmse as model assessment metrics.  
-Ask students to assess model fit.  
+### What is an autoregressive model?  
 
+An **autoregressive model** uses past and/or current values of a variable to predict future values. In our case, we are interested in using past and current values of lake chlorophyll-a to predict future chlorophyll-a.
+
+Today, we will fit a simple form of an autoregressive, or AR model, which uses yesterday's chlorophyll-a observation to predict today's observation. This model can be written as:
+
+$$Chla_{t} = \beta_0 + \beta_1 * (Chla_{t-1} - \overline{Chla}) + \overline{Chla}$$
+where $Chla$ is our timeseries of chlorophyll-a data, $\beta_0$ is the intercept parameter, $\beta_1$ is the coefficient on the 1-day lag of chlorophyll-a, and $\overline{Chla}$ is the mean of the chlorophyll-a timeseries.
+
+Let's fit this model to our data! 
+
+Before we fit the model, we are going to log-transform our data. We do this because autoregressive models are statistical models that don't understand biological laws. If we didn't log-transform our data, it's possible that our model could predict negative chlorophyll-a (which would indicate negative phytoplankton) - which is not possible in real-world lakes!!
 ```{r}
 model_data <- autocorrelation_data %>%
   mutate(log_chla = log(chla + 0.001))
+```
 
+Next, to fit our model, we will use the `ar.ols()` function, which fits an autoregressive time series model to data by ordinary least squares. 
+
+While it's possible that including additional lags besides a 1-day lag might improve our predictions, for today, we will keep it simple and just use a 1-day lag. We will specify this by adding the `order.max = 1` argument to our function. 
+
+In addition, we will specify:
+
+1. `aic = FALSE` because we know we only want to use the first lag, we don't need to use the AIC, or Akaike Information Criterion, to help us choose how many lags to include
+2. `intercept = TRUE` we do want to fit an intercept term
+3. `demean = TRUE` we do want to subtract the mean
+```{r}
 ar_model <- ar.ols(model_data$log_chla, order.max = 1, aic = FALSE,
                      intercept = TRUE, demean = TRUE)
-ar1 = c(ar_model$ar)
-chla_mean = c(ar_model$x.mean)
+```
+
+Next, let's extract our model parameters and have a look at them.
+
+First, $\beta_0$, the intercept:
+```{r}
 intercept = c(ar_model$x.intercept)
+intercept
+```
+
+Next, $\beta_1$, the 1-day lag coefficient:
+```{r}
+ar1 = c(ar_model$ar)
+ar1
+```
+
+Then, the (log-transformed) mean of chlorophyll-a:
+```{r}
+chla_mean = c(ar_model$x.mean)
+chla_mean
+```
+
+And finally, because there is uncertainty associated with both our data and the process of fitting a model to data, we can look at the standard errors of each of these parameters:
+```{r}
 params_se <- ar_model$asy.se.coef
+params_se
+```
+We will use these standard error values to account for uncertainty in our parameters when we make chlorophyll-a forecasts.
 
+**Q.15 Explain, in your own words, how the autoregressive model you have just fitted predicts chlorophyll-a.**
+
+
+**Answer Q. 15**
+
+
+### How can we assess model fit?
+
+Before we use this model for forecasting, it is a good idea to see how well it fits our data. We will use three methods for doing this:
+
+1. Visual observation of model predictions vs. observations. This is a simple but effective method. The closer your model predictions fall to your observations, the better the model fit.
+2. **Bias**: Bias is the mean difference between model predictions and observations. The smaller the absolute value of the bias, the better your model fit.
+3. **root mean square error (RMSE)**: RMSE is the mean sum of squared errors (differences between predictions and observations), and can be calculated as:
+
+$$RMSE = \sqrt{\frac{\sum_{i=1}^{N}(Predicted_i - Observed_i)^2}{N}}$$
+The closer the RMSE is to 0, the better your model fit.
+
+First, let's use our fitted model to generate predictions.
+```{r}
 mod <- intercept + ar1 * (model_data$log_chla - chla_mean) + chla_mean
+```
 
-residuals <- mod - model_data$log_chla
-err <- mean(exp(mod) - model_data$chla, na.rm = TRUE) 
-rmse <- round(sqrt(mean((exp(mod) - model_data$chla)^2, na.rm = TRUE)), 2)
-
+Next, we will creat a data frame for plotting and exponentiate the model predictions using `exp()`. This reverses the log-transformation and is needed before we can compare our predictions to data.
+```{r}
 model_fit_plot_data <- tibble(date = model_data$datetime,
                               chla = model_data$chla,
                               model = exp(mod))
+```
 
+Now, we can assess our model visually. We will plot the model predictions and observations.
+```{r}
 plot_mod_predictions_chla(model_fit_plot_data)
+```
+**Q.16 Use the plot above to assess the model fit to data. How well do the predictions match the observations?**
 
+
+**Answer Q. 16**
+
+
+
+Next, we will calculate bias. The units of bias are the same as the predicted variable (in our case, $\mu g L^{-1}$).
+```{r}
+bias <- mean(exp(mod) - model_data$chla, na.rm = TRUE) 
+bias
+```
+**Q.17 Use the calculated bias to assess the model fit to data. How good is the model fit? Explain your reasoning.**
+
+
+**Answer Q. 17**
+
+
+
+Finally, we will calculate RMSE. The units of RMSE are also the same as the predicted variable.
+```{r}
+rmse <- round(sqrt(mean((exp(mod) - model_data$chla)^2, na.rm = TRUE)), 2)
+rmse
+```
+**Q.18 Use the calculated RMSE to assess the model fit to data. How good is the model fit? Explain your reasoning.**
+
+**Answer Q. 18**
+
+
+
+We will also save the log-transformed **residuals**, which are the differences between model predictions and observations. We will need these values later on to account for **process uncertainty**, or uncertainty due to the structure of our model, in our forecasts.
+```{r}
+residuals <- mod - model_data$log_chla
 ```
 
 ## 4. Specify a distribution of forecast **initial conditions** (starting conditions). 
+
 **Initial conditions** are the starting conditions of your model when you generate a forecast. **Initial conditions uncertainty** refers to uncertainty arising because the initial conditions are not precisely known or because the calculations cannot be performed with the precise initial conditions.
 
 Even though we have measurements of chlorophyll-a from our lake, we know that chlorophyll-a varies throughout the day so this measurement might not capture exactly the chlorophyll-a in our lake at this time. Additionally, there may be observation error in our chlorophyll-a measurements.
 
 To account for initial conditions uncertainty we can generate a distribution around the initial condition of chlorophyll-a and then run our model with slightly different initial conditions.
 
-Explain that we will be using high-frequency data from the previous year to get an estimate of our initial conditions uncertainty.
+So far, we have been working with daily chlorophyll-a values from Lake Barco.
+
+Now, we will use some high-frequency (5-minute) chlorophyll-a data from our lake to estimate initial conditions uncertainty. First, we can look at variability in this 5-minute data over the course of a day to get a visual understanding of the daily variability in chlorophyll-a.
+```{r}
+#GOT stuck here - need plot that groups by day and plots time of day on x axis
+high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
+  mutate(date = date(datetime),
+         hms = hms(datetime))
+
+ggplot(data = high_frequency_data)+
+  geom_line(aes(x = hms, y = chla, group = date))+
+  theme_bw()
+```
+
 
 Need to explain rnorm function and arguments
 

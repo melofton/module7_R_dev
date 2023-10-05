@@ -9,6 +9,23 @@ library(zoo)
 
 ## Define functions----
 
+### AR model related functions
+
+# can be used to calculate the significance threshold of an ACF or PACF object
+calculate_pacf_threshold <- function(x, ci=0.95, ci.type="white"){
+  #' Gets confidence limit data from acf object `x`
+  if (!ci.type %in% c("white", "ma")) stop('`ci.type` must be "white" or "ma"')
+  if (class(x) != "acf") stop('pass in object of class "acf"')
+  clim0 <- qnorm((1 + ci)/2) / sqrt(x$n.used)
+  if (ci.type == "ma") {
+    clim <- clim0 * sqrt(cumsum(c(1, 2 * x$acf[-1]^2))) 
+    return(clim[-length(clim)])
+  } else {
+    return(clim0)
+  }
+}
+
+
 ### ENKF functions from Jake Zwart GLEON workshop---
 
 #### Function to create vector to hold states and parameters for updating---
