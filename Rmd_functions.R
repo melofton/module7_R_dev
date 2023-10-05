@@ -281,6 +281,22 @@ plot_chla_obs <- function(lake_data){
   return(p)
 }
 
+# Plot chl-a data + 1 day lag: timeseries
+#' @param plot_data chlorophyll-a dataframe with datetime, chla and chla_lag
+
+plot_chla_lag <- function(plot_data){
+  p <- ggplot(data = plot_data)+
+    geom_line(aes(x = datetime, y = chla_lag, color = "1 day lag of chlorophyll"))+
+    geom_line(aes(x = datetime, y = chla, color = "chlorophyll"))+
+    xlab("2018")+
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    scale_color_manual(values = c("chlorophyll" = "darkgreen","1 day lag of chlorophyll" = "lightgreen"))+
+    labs(color = NULL)+
+    theme_bw()+
+    theme(legend.position = "bottom")
+  return(p)
+}
+
 #### Function to plot AR model fit ----
 #' @param model_fit_plot_data data frame of lake observations and model predictions
 #'  
