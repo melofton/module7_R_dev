@@ -172,18 +172,17 @@ initialize_Y = function(Y, obs, n_states_est, n_step, n_en, state_sd, yini){
 #' @param n_en number of model ensembles 
 #' @param start start date of model run 
 #' @param stop date of model run
-#' @param obs_file observation file 
-#' @param obs_cv coefficient of variation of observations 
-#' @param init_cond_cv initial condition CV 
-#' @param state_names character string vector of state names as specified in obs_file
-#' @param yini vector of initial conditions for states (chla)
+#' @param forecast_data observation file 
+#' @param ic_sd coefficient of variation of observations 
+#' @param ic vector of initial conditions for states (chla)
+#' @param model R object of fitted autoregressive model
 #' @param residuals vector of residuals from model fit
-forecast_with_EnKF = function(n_en = 30, 
+run_forecasts = function(n_en = 30, 
                 start = '2020-09-25', # start date 
                 stop = '2020-10-29', 
-                obs_file = lake_data,
-                obs_sd = c(0.1),
-                yini = yini,
+                forecast_data = lake_data,
+                ic_sd = c(0.1),
+                ic = yini,
                 model = ar_model,
                 residuals = residuals){
   
@@ -197,15 +196,15 @@ forecast_with_EnKF = function(n_en = 30,
   residuals = residuals
   
   # get observation matrix
-  obs_df = obs_file %>% 
+  obs_df = forecast_data %>% 
     select(datetime, chla) 
   
   yini <- c( #initial estimate of chl-a
-    chla = yini[1]) #ug/L
+    chla = ic[1]) #ug/L
   
   #define sds
-  state_sd = obs_sd
-  init_cond_sd = obs_sd
+  state_sd = ic_sd
+  init_cond_sd = ic_sd
 
   # setting up matrices
   # observations as matrix
@@ -237,6 +236,15 @@ forecast_with_EnKF = function(n_en = 30,
                    n_step = n_step, n_en = n_en, state_sd = init_cond_sd, yini = yini)
   Y_ic = Y$Y_ic
   Y_pred = Y$Y_pred
+  
+  if(any(!is.na(obs[ , , 1]))){
+    Y_ic = kalman_filter(Y = Y_ic,
+                         R = R,
+                         obs = obs,
+                         H = H,
+                         n_en = n_en,
+                         cur_step = 1) # updating params / states if obs available
+  }
   
   
   # start modeling
@@ -277,7 +285,7 @@ forecast_with_EnKF = function(n_en = 30,
                            cur_step = t) # updating params / states if obs available
     }
   }
-  out = list(Y_ic = Y_ic, Y_pred = Y_pred, dates = dates, R = R, obs_file = obs_file, state_sd = state_sd)
+  out = list(Y_ic = Y_ic, Y_pred = Y_pred, dates = dates, R = R, obs_file = forecast_data, state_sd = state_sd)
   
   return(out)
 }
@@ -347,7 +355,7 @@ plot_ic_dist <- function(curr_chla, ic_uc){
     # geom_vline(data = df, aes(xintercept = x, color = label)) +
     geom_vline(xintercept = curr_chla) +
     geom_density(aes(ic_uc), fill = l.cols[2], alpha = 0.3) +
-    xlab(expression(paste("log (Chlorophyll-a (",mu,g,~L^-1,"))"))) +
+    xlab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")"))) +
     ylab("Density") +
     theme_bw(base_size = 18)+
     ggtitle("Initial condition distribution")
@@ -377,13 +385,13 @@ plot_chla = function(est_out, lake_data, obs_file, start, stop, n_en){
     #        obs_assimilated = exp(obs_assimilated))
     mutate(assim_key1 = ifelse(!is.na(obs_assimilated), 1, 0),
            assim_key2 = ifelse(!is.na(lag(obs_assimilated)), 1, 0),
-           obs_assimilated = exp(obs_assimilated))
+           obs_assimilated = obs_assimilated)
   
   chla_pred = NULL
   chla_ic = NULL
   for(i in 1:length(plot_dates)){
-    chla_pred <- c(chla_pred, exp(est_out$Y_pred[1,i,]))
-    chla_ic <- c(chla_ic, exp(est_out$Y_ic[1,i,]))
+    chla_pred <- c(chla_pred, est_out$Y_pred[1,i,])
+    chla_ic <- c(chla_ic, est_out$Y_ic[1,i,])
   }
   
   plot_data <- tibble(datetime = rep(plot_dates, each = n_en),
@@ -488,7 +496,7 @@ plot_chla = function(est_out, lake_data, obs_file, start, stop, n_en){
 #' @param lake_data NEON data for selected site 
 #' 
 pred_v_obs_chla = function(est_out, lake_data){
-  mean_chla_est = exp(apply(est_out$Y_pred[1,,] , 1, FUN = mean))
+  mean_chla_est = apply(est_out$Y_pred[1,,] , 1, FUN = mean)
   
   # this could be used to show a 95% confidence error bar on predicted
   # but I think the error bars make the plot a bit hard to read
@@ -526,7 +534,7 @@ plot_da_frequency_experiment_results <- function(da_frequency_experiment_output,
   
   for(i in 1:length(da_frequency_experiment_output)){
     
-  forecast = exp(apply(da_frequency_experiment_output[[i]]$Y_pred[1,,] , 1, FUN = mean))
+  forecast = apply(da_frequency_experiment_output[[i]]$Y_pred[1,,] , 1, FUN = mean)
   
   #limit obs to forecast dates
   forecast_obs <- lake_data %>%
@@ -563,7 +571,7 @@ plot_obs_uncertainty_experiment_results <- function(obs_uncertainty_experiment_o
   
   for(i in 1:length(obs_uncertainty_experiment_output)){
     
-    forecast = exp(apply(obs_uncertainty_experiment_output[[i]]$Y_pred[1,,] , 1, FUN = mean))
+    forecast = apply(obs_uncertainty_experiment_output[[i]]$Y_pred[1,,] , 1, FUN = mean)
     
     #limit obs to forecast dates
     forecast_obs <- lake_data %>%
