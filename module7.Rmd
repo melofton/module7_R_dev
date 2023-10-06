@@ -781,3 +781,7 @@ rmse <- sqrt(mean((forecast_obs$chla - forecast)^2, na.rm = TRUE))
 plot_obs_uncertainty_experiment_results(obs_uncertainty_experiment_output,
                                      obs_uncertainty)
 ```
+
+What is the extension activity where students are actually asked to code?
+
+See how DA frequency affects DO forecasts? Same model approach, same code, students need to swap out for DO dataset? But what would students need to choose? Maybe they choose from a suite of high-frequency variables? So it could be DO, temp, ...... fDOM? (would be good to have at least 3 choices)
