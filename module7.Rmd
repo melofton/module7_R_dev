@@ -785,3 +785,7 @@ plot_obs_uncertainty_experiment_results(obs_uncertainty_experiment_output,
 What is the extension activity where students are actually asked to code?
 
 See how DA frequency affects DO forecasts? Same model approach, same code, students need to swap out for DO dataset? But what would students need to choose? Maybe they choose from a suite of high-frequency variables? So it could be DO, temp, ...... fDOM? (would be good to have at least 3 choices)
+
+Looking at data product https://data.neonscience.org/data-products/DP1.20288.001
+
+It could be DO, pH, fDOM, turbidity pretty easily, and then they just choose one and do the same exercise of fitting the AR model and doing DA at different frequencies, and at the end the goal is to compare the money plot of DA frequency vs RMSE between chl-a and whatever the second variable was they chose and determine which one DA helps the most and speculate as to why.
