@@ -43,13 +43,13 @@ More frequent observations allow us to update our forecast models more often, po
 
 ## Overview
 
-In this module, we will generate forecasts of lake chlorophyll-a for 1-10 days into the future. First, we will generate a 10-day forecast that does not assimilate any data. This will involve the following steps:  
+In this module, we will generate multiple one-day-ahead forecasts of lake chlorophyll-a. First, we will generate forecasts that do not assimilate any data. This will involve the following steps:  
 
 1. Read in and visualize chlorophyll-a data from Lake Barco, FL, USA.  
 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
 3. Fit an autoregressive forecast model.   
 4. Specify a distribution of forecast **initial conditions** (starting conditions). 
-5. Generate a 10-day forecast with no data assimilation. 
+5. Generate forecasts with no data assimilation. 
 6. Assess forecast accuracy.    
 
 Next, we will explore the effect of **data assimilation** on forecast accuracy by conducting two data assimilation experiments. First, we will assimilate data at different temporal frequencies (e.g., daily vs. weekly) and assess the effect on forecast accuracy. Second, we will assimilate data with different levels of observation uncertainty (e.g., high vs. low observation uncertainty) and assess the effect on forecast accuracy. 
@@ -262,13 +262,13 @@ ggplot(data = acf_plot_data, aes(x = Lag, y = ACF))+
 
 As you may have discovered while answering Q.11, it can be difficult to decide exactly how many lags to include in a forecasting model. Fortunately, forecasters have developed tools to help make this decision. One such tool is the **partial autocorrelation function**, or **PACF**. This function calculates the autocorrelation of a particular lag *while removing* the effects of indirect correlations with other lags. 
 
-To explain another way: the **autocorrelation** of chlorophyll-a and the 7-day lag of chlorophyll-a is affected by the autocorrelation of chlorophyll-a with the 1-day lag, 2-day lag autocorrelation, the 3-day lag, and so on.... as well as the relationship of the 7-day lag to the 1-day lag, the 2-day lag, the 3-day lag, and so on.....
+To explain another way: the **autocorrelation** of chlorophyll-a and the 7-day lag of chlorophyll-a is affected by the autocorrelation of chlorophyll-a with the 1-day lag, the 2-day lag, the 3-day lag, and so on.... as well as the relationship of the 7-day lag to the 1-day lag, the 2-day lag, the 3-day lag, and so on.....
 
 The PACF avoids this problem. You can think of it as only measuring the effect of one particular set of lagged values (e.g., the 5-day lagged values), while accounting for (and thereby removing the influence of) all other lags.
 
 To calculate the PACF, we can use the same `acf()` function, while adding the argument `type = c("partial")` to indicate that we'd like to calculate the partial autocorrelation function. 
 ```{r}
-pacf_list <- acf(autocorrelation_data$chla, type = c("partial"), plot = TRUE)
+pacf_list <- acf(autocorrelation_data$chla, type = c("partial"), plot = FALSE)
 
 pacf_plot_data <- tibble(Lag = pacf_list$lag,
                          Partial_ACF = round(pacf_list$acf, 2))
@@ -308,7 +308,7 @@ ggplot(data = pacf_plot_data, aes(x = Lag, y = Partial_ACF))+
 
 An **autoregressive model** uses past and/or current values of a variable to predict future values. In our case, we are interested in using past and current values of lake chlorophyll-a to predict future chlorophyll-a.
 
-Today, we will fit a simple form of an autoregressive, or AR model, which uses yesterday's chlorophyll-a observation to predict today's observation. This model can be written as:
+Today, we will fit a simple form of an autoregressive, or AR model, which uses yesterday's chlorophyll-a observation (so, a 1-day lag) to predict today's observation. This model can be written as:
 
 $$Chla_{t} = \beta_0 + \beta_1 * (Chla_{t-1} - \overline{Chla}) + \overline{Chla}$$
 where $Chla$ is our timeseries of chlorophyll-a data, $\beta_0$ is the intercept parameter, $\beta_1$ is the coefficient on the 1-day lag of chlorophyll-a, and $\overline{Chla}$ is the mean of the chlorophyll-a timeseries.
@@ -440,46 +440,53 @@ To account for initial conditions uncertainty we can generate a distribution aro
 
 So far, we have been working with daily chlorophyll-a values from Lake Barco.
 
-Now, we will use some high-frequency (5-minute) chlorophyll-a data from our lake to estimate initial conditions uncertainty. First, we can look at variability in this 5-minute data over the course of a day to get a visual understanding of the daily variability in chlorophyll-a.
+Now, we will use some high-frequency (5-minute) chlorophyll-a data from our lake to estimate initial conditions uncertainty. 
 ```{r}
-#GOT stuck here - need plot that groups by day and plots time of day on x axis
 high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
   mutate(date = date(datetime),
-         hms = hms(datetime))
-
+         time = hms::as_hms(datetime))
+```
+First, we can look at variability in this 5-minute data over the course of a day to get a visual understanding of the daily variability in chlorophyll-a. Each blue line in the plot below represents a different day of chl-a data, from 2019-09-01 to 2019-10-28.
+```{r}
 ggplot(data = high_frequency_data)+
-  geom_line(aes(x = hms, y = chla, group = date))+
-  theme_bw()
+  geom_line(aes(x = time, y = chla, group = date, color = date))+
+  theme_bw()+
+  theme(legend.position = "none")+
+  xlab("Hour of day")+
+  ylab("Chlorophyll-a (ug/L)")
+```
+
+Next, we will calculate the mean daily standard deviation of chl-a measurements (`ic_sd`), which we will use to estimate uncertainty in our initial conditions. Notice that we also log-transform the high-frequency chl-a data, to be consistent with our model predictions.
+```{r}
+ic_sd_dataframe <- high_frequency_data %>%
+  group_by(date) %>%
+  summarize(daily_sd_chla = sd(log(chla), na.rm = TRUE))
+  
+ic_sd <- mean(initial_condition_sd_dataframe$daily_sd_chla, na.rm = TRUE)
+ic_sd
 ```
 
 
-Need to explain rnorm function and arguments
+Finally, we can generate a distribution of initial conditions for your forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation in units of log(ug/L) calculated from high-frequency data from Lake Barco (`ic_sd`).
 
-Generate a distribution of initial conditions for your forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation in units of log(ug/L) calculated from high-frequency data from Lake Barco (`ic_sd`).
-
+To do this, we will use the `rnorm()` function, which takes `n` draws from a normal distribution with a `mean` and `sd` specified as arguments to the function.
 ```{r}
 curr_chla <- log(lake_data %>%
   filter(datetime == forecast_start_date) %>%
   pull(chla))
 
-high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
-  mutate(date = date(datetime)) %>%
-  group_by(date) %>%
-  summarize(daily_sd_chla = sd(log(chla), na.rm = TRUE))
-  
-ic_sd <- mean(high_frequency_data$daily_sd_chla, na.rm = TRUE)
-ic_uc <- rnorm(n = 1000, mean = curr_chla, sd = ic_sd)
+ic_distribution <- rnorm(n = 1000, mean = curr_chla, sd = ic_sd)
 ```
 
 Plot the distribution around your initial condition. 
 
 ```{r}
-plot_ic_dist(curr_chla, ic_uc)
+plot_ic_dist(curr_chla, ic_distribution)
 ```
 
-## 5. Generate a 10-day forecast with no data assimilation. 
+## 5. Generate one-day-ahead forecasts with no data assimilation. 
 
-Here we will generate a series of 1-day-ahead forecasts. In other words, imagine that these forecasts are generated once per day, and every day, the forecast makes a prediction for tomorrow. We will "give" the forecast model a chlorophyll-a observation from Lake Barco that will be used as the initial condition for the first forecast. But after that, we will not provide any additional observations for additional forecasts. This could happen if, for example, a sensor malfunctioned and you were unable to collect data, or if you did not have a high-frequency sensor and were only able to collect 1-2 observations per month. In the absence of additional observations, the daily forecast model will simply use yesterday's forecast as the initial condition for today's forecast.
+Here we will generate a series of **1-day-ahead forecasts**. These forecasts are generated once per day, and every day, the forecast makes a prediction for tomorrow. We will "give" the forecast model a chlorophyll-a observation from Lake Barco that will be used as the initial condition for the first forecast. But after that, we will not provide any additional observations for additional forecasts. This could happen if, for example, a sensor malfunctioned and you were unable to collect data, or if you did not have a high-frequency sensor and were only able to collect 1-2 observations per month. In the absence of additional observations, the daily forecast model will simply use yesterday's forecast as the initial condition for today's forecast.
 
 Explain each of the arguments to the EnKF in very simple terms (e.g., we need to provide the residuals of our model fit so we can account for uncertainty due to limitations in how well our model predicts chl-a)
 
