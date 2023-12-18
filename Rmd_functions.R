@@ -495,16 +495,16 @@ plot_chla = function(est_out, lake_data, obs_file, start, stop, n_en){
 #' @param est_out forecast output from EnKF wrapper 
 #' @param lake_data NEON data for selected site 
 #' 
-pred_v_obs_chla = function(est_out, lake_data){
-  mean_chla_est = apply(est_out$Y_pred[1,,] , 1, FUN = mean)
+pred_v_obs_chla = function(forecasts, lake_data){
+  mean_chla_est = apply(forecasts$Y_pred[1,,] , 1, FUN = mean)
   
   # this could be used to show a 95% confidence error bar on predicted
   # but I think the error bars make the plot a bit hard to read
-  # top_din_est = apply(est_out$Y[2,,] , 1, FUN = quantile, probs=c(0.975))
-  # bottom_din_est = apply(est_out$Y[2,,] , 1, FUN = quantile, probs=c(0.025))
+  # top_din_est = apply(forecasts$Y[2,,] , 1, FUN = quantile, probs=c(0.975))
+  # bottom_din_est = apply(forecasts$Y[2,,] , 1, FUN = quantile, probs=c(0.025))
   lake_data <- lake_data %>%
     mutate(datetime = as.Date(datetime)) %>%
-    filter(datetime %in% est_out$dates) 
+    filter(datetime %in% forecasts$dates) 
 
   plot(mean_chla_est ~ lake_data$chla, type ='p', 
        ylim = c(min(c(range(mean_chla_est,na.rm = TRUE),range(lake_data$chla,na.rm = TRUE))),c(max(c(range(mean_chla_est,na.rm = TRUE),range(lake_data$chla,na.rm = TRUE))))),
@@ -514,11 +514,11 @@ pred_v_obs_chla = function(est_out, lake_data){
   
   #this code could be used to show error bars representing uncertainty but 
   #I think it makes the plot kinda hard to read
-  # arrows(lake_data$din[1:35]  - est_out$state_sd[2], mean_din_est,
-  #        lake_data$din[1:35]  + est_out$state_sd[2], mean_din_est, 
+  # arrows(lake_data$din[1:35]  - forecasts$state_sd[2], mean_din_est,
+  #        lake_data$din[1:35]  + forecasts$state_sd[2], mean_din_est, 
   #        code = 3, length = 0.1, angle = 90, col = 'black')
-  # arrows(lake_data$din, mean_din_est  - est_out$state_sd[2], 
-  #        lake_data$din, mean_din_est  + est_out$state_sd[2], 
+  # arrows(lake_data$din, mean_din_est  - forecasts$state_sd[2], 
+  #        lake_data$din, mean_din_est  + forecasts$state_sd[2], 
   #        code = 3, length = 0.1, angle = 90, col = 'black')
 }
 
