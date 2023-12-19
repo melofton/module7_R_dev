@@ -16,6 +16,7 @@ Alternatively, students can complete this version of the module instead of the S
 ## Summary
 
 ### Focal question for this module:   
+
 **How can we use data to improve ecological forecasts?**
 
 To be useful for management, ecological forecasts need to be both accurate enough for managers to be able to rely on them for decision-making and include a representation of forecast uncertainty, so managers can properly interpret the probability of future events. To improve forecast accuracy, we can update forecasts with observational data once they become available, a process known as **data assimilation.** Recent improvements in environmental sensor technology and an increase in the number of sensors deployed in ecosystems have resulted in an increase in the availability of data for assimilation to help develop and improve forecasts for natural resource management. In this module, you will develop an autoregressive model of primary productivity and use the model to generate forecasts. You will then explore how assimilating data at different temporal frequencies (e.g., daily, weekly) and with different levels of observation uncertainty affects forecast accuracy. 
@@ -123,7 +124,7 @@ Forecasts of chlorophyll-a concentrations days to weeks into the future can give
 
 
 
-Read in and view lake chlorophyll-a data. 
+Now we will read in and view lake chlorophyll-a data. 
 
 We will rename the columns of our dataframe, and use the `cumsum()` function to filter out several rows with NA chlorophyll-a values at the beginning of our dataset. Here, the `cumsum()` function returns, at each row, the cumulative number of non-NA chl-a values up to that row. This allows us to filter out NA values at the beginning of the dataset, because as soon as the first non-NA chl-a value is observed, the `cumsum()` function will return a value greater than 0.
 
@@ -148,13 +149,13 @@ plot_chla_obs(lake_data)
 
 ## 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
 
-## What is autocorrelation?    
+### What is autocorrelation?    
 
 **Autocorrelation** is the correspondence between a value and previous values of that variable which have been recently observed. For example, mean daily air temperature over the course of a year exhibits autocorrelation, as today's mean daily air temperature is related to the mean daily air temperatures observed over the days and weeks prior to today. 
 
 The **incredibly useful** thing about autocorrelation from a forecasting perspective is that it allows us to use *previous or current observations* of a variable to predict *future values* of that variable - excellent!
 
-## What is a lag?  
+### What is a lag?  
 
 A **lag** is a particular amount of time that has passed between when we observe a value we are using as an explanatory, or independent, variable, and when we observe a value that we are trying to predict. For example, if you use today's air temperature to predict tomorrow's air temperature, you are using a 1-day lag of air temperature to predict tomorrow's air temperature. 
 
@@ -192,6 +193,7 @@ plot_data <- autocorrelation_data %>%
 
 plot_chla_lag(plot_data)
 ```
+
 **Q.7 Describe what you observe on the timeseries figure above. How do the two lines plotted on the timeseries (chlorophyll and 1 day lag of chlorophyll) relate to each other?** 
 
 **Answer Q.7**
@@ -209,6 +211,7 @@ ggplot(data = autocorrelation_data, aes(x = chla_lag, y = chla))+
   geom_abline(slope = 1, intercept = 0, linetype = 2)+
   theme_bw()
 ```
+
 **Q.8 Describe what you observe on the scatterplot figure above. Do you think the Lake Barco chlorophyll-a data exhibit autocorrelation? Why or why not?** 
 
 **Answer Q.8**
@@ -232,6 +235,7 @@ autocorrelation_lag1 = round(sum((autocorrelation_data$chla[-1] - mean(autocorre
 
 autocorrelation_lag1
 ```
+
 **Q.9 Interpret the value of `autocorrelation_lag1`; does this value indicate low or high autocorrelation between chlorophyll-a and a 1-day lag of chlorophyll-a?** 
 
 **Answer Q.9**
@@ -250,6 +254,7 @@ ggplot(data = acf_plot_data, aes(x = Lag, y = ACF))+
   ylab("Autocorrelation")+
   theme_bw()
 ```
+
 **Q.10 Describe how autocorrelation changes as the lag in days increases. Why do you think this pattern occurs?** 
 
 **Answer Q.10**
@@ -263,7 +268,7 @@ ggplot(data = acf_plot_data, aes(x = Lag, y = ACF))+
 
 As you may have discovered while answering Q.11, it can be difficult to decide exactly how many lags to include in a forecasting model. Fortunately, forecasters have developed tools to help make this decision. One such tool is the **partial autocorrelation function**, or **PACF**. This function calculates the autocorrelation of a particular lag *while removing* the effects of indirect correlations with other lags. 
 
-To explain another way: the **autocorrelation** of chlorophyll-a and the 7-day lag of chlorophyll-a is affected by the autocorrelation of chlorophyll-a with the 1-day lag, the 2-day lag, the 3-day lag, and so on.... as well as the relationship of the 7-day lag to the 1-day lag, the 2-day lag, the 3-day lag, and so on.....
+To explain another way: the **autocorrelation** of chlorophyll-a and the 7-day lag of chlorophyll-a is affected by the autocorrelation of chlorophyll-a with the 1-day lag, the 2-day lag, the 3-day lag, and so on, as well as the relationship of the 7-day lag to the 1-day lag, the 2-day lag, the 3-day lag, and so on.
 
 The PACF avoids this problem. You can think of it as only measuring the effect of one particular set of lagged values (e.g., the 5-day lagged values), while accounting for (and thereby removing the influence of) all other lags.
 
@@ -283,6 +288,7 @@ ggplot(data = pacf_plot_data, aes(x = Lag, y = Partial_ACF))+
   ylab("Partial autocorrelation")+
   theme_bw()
 ```
+
 **Q.12 Examine the PACF plot. Which lag contributes the most to autocorrelation in the Lake Barco chlorophyll-a data? Explain how you know.**
 
 **Answer Q. 11**
@@ -319,7 +325,7 @@ Let's fit this model to our data!
 model_data <- autocorrelation_data 
 ```
 
-Next, to fit our model, we will use the `ar.ols()` function, which fits an autoregressive time series model to data by ordinary least squares. 
+To fit our model, we will use the `ar.ols()` function, which fits an autoregressive time series model to data by ordinary least squares. 
 
 While it's possible that including additional lags besides a 1-day lag might improve our predictions, for today, we will keep it simple and just use a 1-day lag. We will specify this by adding the `order.max = 1` argument to our function. 
 
@@ -424,29 +430,183 @@ rmse
 
 
 
-We will also save the log-transformed **residuals**, which are the differences between model predictions and observations. We will need these values later on to account for **process uncertainty**, or uncertainty due to the structure of our model, in our forecasts.
+We will also save the **residuals** of our model, which are the differences between model predictions and observations. We will need these values later on to account for **process uncertainty**, or uncertainty due to the structure of our model, in our forecasts.
 ```{r}
 residuals <- mod - model_data$chla
 ```
 
-## 4. Specify a distribution of forecast **initial conditions** (starting conditions). 
+## 4. Generate a deterministic forecast (without uncertainty).
 
-**Initial conditions** are the starting conditions of your model when you generate a forecast. **Initial conditions uncertainty** refers to uncertainty arising because the initial conditions are not precisely known or because the calculations cannot be performed with the precise initial conditions.
+Finally, we are ready to generate a forecast with our fitted model! 
+
+### What is a **deterministic forecast**?
+
+A deterministic forecast is one that does not account for any uncertainty associated with predictions.
+
+### A note on shifting from model fitting to forecasting
+So far, we have fit our chlorophyll-a model using yesterday's chlorophyll-a to predict today's chlorophyll-a. 
+ 
+Now, to forecast, we will need to make a subtle but important change in the way we write our model, to show that instead of predicting today's chlorophyll-a, we are now forecasting tomorrow's chlorophyll-a:
+
+$$Chla_{t+1} = \beta_0 + \beta_1 * (Chla_{t1} - \overline{Chla}) + \overline{Chla}$$
+Note the change in the subscripts of the Chla variables from t-1 to t and t to t+1!!
+
+To generate a forecast for many days into the future using our model, we will start by using today's observation to make a prediction for tomorrow, and then use the prediction for tomorrow to predict two days from now, and then use the prediction for two days from now to predict three days from now, and so on.
+
+To do this in code, we will use a **for-loop**.
+
+#### What is a for-loop?
+
+A **for-loop** runs a section of code repeatedly. The number of times the for-loop runs is specified by the coder, either by specifying the number of times the code should be run before the for-loop stops. For example, below we write a for-loop that prints "Hello World!" eight times.
+```{r}
+for(i in 1:8){
+  print("Hello World!")
+}
+```
+**Notice:**      
+1. We specify the number of times the for-loop should run with the code `for(i in 1:8)`. We will explain what the `i` refers to when we discuss indexing below.  
+2. The code that is repeatedly run is contained in brackets `{}`.
+
+#### What is indexing in a for-loop?
+
+Within a for-loop, **indexing** allows you to refer to a particular iteration, or individual code run, of the loop. This can be useful if you want to, for example, perform a particular calculation on every row of a data frame. In R, `i` is commonly used for indexing in for-loops. Below we write a for-loop that prints the numbers 1 to 8 using indexing.
+```{r}
+for(i in 1:8){
+  print(i)
+}
+```
+#### How is indexing in a for-loop useful for ecological forecasting?
+  
+Often, we want to run a forecast model repeatedly to make predictions for multiple days into the future. For-loops can be a useful way to accomplish this, *particularly* if each day's prediction depends on the previous day.  
+  
+Let's pretend we have a very simple forecast model, where tomorrow's chlorophyll-a is equal to today's chlorophyll-a + 1 microgram per liter. If we wanted to generate a 7-day prediction of chlorophyll-a using this model, we could write a for-loop to do so.  
+  
+First, we set our initial observed chlorophyll-a.
+
+```{r}
+starting_chla <- 11.4 #micrograms per liter
+```
+
+Then, we create an empty vector in which we will store our starting chlorophyll-a as well as our predicted chlorophyll-a for the next seven days (so the total length of the vector = 8 days).
+
+```{r}
+chla <- rep(NA, 8)
+```
+
+Next, we set the first element of our empty vector to be the starting chlorophyll-a.
+
+```{r}
+chla[1] <- starting_chla
+chla
+```
+
+Finally, we run a for-loop to generate 7 days of chlorophyll-a predictions, which will be stored in the `chla` vector. **Note** that the for-loop starts at the 2nd iteration (`for(i in 2:8)`) because we already know today's chlorophyll-a, so we are starting with tomorrow's prediction.
+
+```{r}
+for(i in 2:8){
+  chla[i] = chla[i-1] + 1 #micrograms per liter
+  print(chla[i])
+}
+```
+  
+**Q.XX (Rmd)** Can you alter the code below to generate a **10-day** prediction of chlorophyll-a rather than a 7-day prediction? What is the predicted chlorophyll-a on the 10th day?  
+  
+**Answer Q.XX** Edit the code block to provide your answer.
+```{r}
+starting_chla <- 11.4 #degrees C
+
+chla <- rep(NA, 8)
+
+chla[1] <- starting_chla
+chla
+
+for(i in 2:8){
+  chla[i] = chla[i-1] + 1 #micrograms per liter
+  print(chla[i])
+}
+```
+  
+Of course, this is probably not a very good model for predicting chlorophyll-a, because it would lead to chlorophyll-a increasing infinitely into the future! Next, we will use the concept of a for-loop to make a forecast of chlorophyll-a using the autoregressive model you fit above.
+
+First, we will specify how many days we would like to forecast
+```{r}
+days_to_forecast = 10
+```
+
+Then we will create a date vector of our forecast start dates, based on how many days we would like to forecast.
+```{r}
+forecast_dates <- seq.Date(from = as.Date(forecast_start_date), to = as.Date(forecast_start_date) + days_to_forecast, by = 'days')
+
+```
+
+Next, we need to specify how often we want the forecast model to assimilate data. For this first series of forecasts, we want to see what happens when no data is assimilated during the forecast period (which is 10 days). So, we will set the `chla_assimilation_frequency` to 11 days, ensuring that no data will be assimilated during the 10-day forecast period.
+```{r}
+chla_assimilation_frequency = 11
+```
+
+Just before we run the forecast, we need to format our lake data to play nicely with our forecasting function. First, we will create a vector (`chla_assimilation_dates`) that we will use as an index to be sure that we only provide the model with the chlorophyll-a data that we want to assimilate. In this case, only the observation on the first day of the forecast period will be provided as the initial condition for the forecast. Then, we will manipulate our lake data to create a `forecast_data` dataframe, which is the data that will be provided to the model for forecasting.
+```{r}
+  chla_assimilation_dates <- forecast_dates[seq(1, length(forecast_dates), chla_assimilation_frequency)]
+  
+  forecast_data <- lake_data %>%
+    select(datetime, chla) %>%
+    mutate(datetime = as.Date(datetime)) %>%
+    filter(datetime %in% forecast_dates) %>%
+    mutate(chla = ifelse(datetime %in% chla_assimilation_dates,chla,NA)) 
+```
+
+
+## 5. Generate a forecast with **initial conditions** uncertainty. 
+
+### What is ecological forecast uncertainty? 
+
+Forecast uncertainty is the range of possible alternate future conditions predicted by a model. We generate multiple different predictions of the future because the future is inherently unknown.  
+
+### Where does ecological forecast uncertainty come from?
+
+Uncertainty comes from natural variability in the environment, imperfect representation of an ecological system in a model, and error when measuring the system. When generating a forecast, uncertainty can come from the structure of the model used, the initial conditions of the model, the parameters of the model, and the data used to drive the model, among other sources.
+
+### Why is uncertainty important to quantify for an ecological forecast? 
+
+Knowing the uncertainty in a forecast allows forecast users to make informed decisions based on the range of forecasted outcomes and prepare accordingly.
+
+To learn more about forecast uncertainty, you can explore Macrosystems EDDIE Module 6: Understanding Uncertainty in Ecological Forecasts, which is available both as an [R Shiny app](https://macrosystemseddie.shinyapps.io/module6/) and as an [RMarkdown](https://github.com/MacrosystemsEDDIE/module6_R).
+
+### What are forecast **initial conditions**?
+
+**Initial conditions** are the starting conditions of your model when you generate a forecast. 
+
+### What is **initial conditions uncertainty**?
+
+**Initial conditions uncertainty** refers to uncertainty arising because the current conditions in an ecosystem - in our case, lake chlorophyll-a - are not precisely known.
 
 Even though we have measurements of chlorophyll-a from our lake, we know that chlorophyll-a varies throughout the day so this measurement might not capture exactly the chlorophyll-a in our lake at this time. Additionally, there may be observation error in our chlorophyll-a measurements.
 
 To account for initial conditions uncertainty we can generate a distribution around the initial condition of chlorophyll-a and then run our model with slightly different initial conditions.
 
-So far, we have been working with daily mean chlorophyll-a values from Lake Barco.
+**Q.XX** Explain, in your own words, what forecast uncertainty is and why it is important to account for uncertainty in forecasts.
 
-Now, we will use some high-frequency (5-minute) chlorophyll-a data from our lake to estimate initial conditions uncertainty. 
+**Answer Q.XX**
+
+
+
+
+**Q.19** What data from Lake Barco are needed to provide the initial condition for your forecast model? 
+
+**Answer Q.19**
+
+
+
+So far, we have been working with daily mean chlorophyll-a values from Lake Barco to fit our model and generate a deterministic forecast.
+
+Now, we will use some high-frequency (5-minute) chlorophyll-a data from our lake to estimate initial conditions uncertainty. For ease of visualization, we will only look at data from 2019-10-09 to 2019-10-12.
 ```{r}
 high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
   mutate(date = date(datetime),
          time = hms::as_hms(datetime)) %>%
   filter(date >= "2019-10-09" & date <= "2019-10-12")
 ```
-First, we can look at variability in this 5-minute data over the course of a day to get a visual understanding of the daily variability in chlorophyll-a. Each colored line in the plot below represents a different day of chl-a data from midnight to midnight. For ease of visualization, we will only look at data from 2019-10-09 to 2019-10-12.
+We can look at variability in this 5-minute data over the course of a day to get a visual understanding of the daily variability in chlorophyll-a. Each colored line in the plot below represents a different day of chl-a data from midnight to midnight. 
 ```{r}
 ggplot(data = high_frequency_data)+
   geom_line(aes(x = time, y = chla, group = date, color = as.factor(date)))+
@@ -456,9 +616,18 @@ ggplot(data = high_frequency_data)+
   ylab("Chlorophyll-a (ug/L)")
 ```
 
-**Q.XX** Examine the plot of high-frequency chlorophyll-a data. How variable is chlorophyll-a over the course of a day? 
+**Q.20** Examine the plot of high-frequency chlorophyll-a data. How variable is chlorophyll-a over the course of a day? 
 
-**Answer Q.XX**
+**Answer Q.20**
+
+
+
+**Q.21** Recall that we are using the daily mean of chlorophyll-a as the initial condition for our model. Given the daily variability that you see in the high-frequency chlorophyll-a data, do you think that using a daily mean is a good representation of daily chlorophyll-a in Lake Barco? Explain your reasoning.
+
+**Answer Q.21**
+
+
+
 
 Next, we will calculate the mean daily standard deviation of chl-a measurements (`ic_sd`), which we will use to estimate uncertainty in our initial conditions. 
 ```{r}
@@ -467,10 +636,11 @@ ic_sd_dataframe <- high_frequency_data %>%
   summarize(daily_sd_chla = sd(chla, na.rm = TRUE))
   
 ic_sd <- mean(ic_sd_dataframe$daily_sd_chla, na.rm = TRUE)
+ic_sd
 ```
 
 
-Finally, we can generate a distribution of initial conditions for your forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation in units of ug/L calculated from high-frequency data from Lake Barco (`ic_sd`).
+Now, we can generate a distribution of initial conditions for our forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation in units of ug/L calculated from high-frequency data from Lake Barco (`ic_sd`).
 
 To do this, we will use the `rnorm()` function, which takes `n` draws from a normal distribution with a `mean` and `sd` specified as arguments to the function.
 ```{r}
@@ -482,20 +652,26 @@ ic_distribution <- rnorm(n = 1000, mean = curr_chla, sd = ic_sd)
 ```
 
 Plot the distribution around your initial condition. 
-
 ```{r}
 plot_ic_dist(curr_chla, ic_distribution)
 ```
 
-**Q.XX** Examine the plots of high-frequency chlorophyll-a data (above) and of initial conditions uncertainty. How do you think daily variability in chlorophyll-a data affects the initial conditions uncertainty in our model?
+Finally, to generate a forecast that accounts for initial conditions uncertainty, we will run our autoregressive model multiple times using different draws from this distribution as the initial condition for chlorophyll-a. A forecast that is generated using multiple runs of a model with slightly different conditions is called an **ensemble forecast**, and each model run is referred to as an **ensemble member**.
+```{r}
 
-**Answer Q.XX**
+```
+
+**Q.22** Explain, in your own words, what **initial conditions uncertainty** is and how it can be accounted for in a forecast.
+
+**Answer Q.22**
+
+
 
 ## 5. Generate one-day-ahead forecasts with no data assimilation. 
 
-Here we will generate a series of **1-day-ahead forecasts**. These forecasts are generated once per day, and each day a prediction is made for tomorrow. We will "give" the forecast model a chlorophyll-a observation from Lake Barco that will be used as the initial condition for the first forecast. But after that, we will not provide any additional observations for additional forecasts. This could happen if, for example, a sensor malfunctioned and you were unable to collect data, or if you did not have a high-frequency sensor and were only able to collect 1-2 observations per month. In the absence of additional observations, the daily forecast model will simply use yesterday's forecast as the initial condition for today's forecast.
+Here we will generate a series of **1-day-ahead forecasts**. These forecasts are generated once per day, and each day a prediction is made for tomorrow. On the first day, we will "give" the forecast model an up-to-date chlorophyll-a observation from Lake Barco that will be used as the initial condition for the first forecast, to make a prediction for tomorrow. But after that, we will not provide any additional observations for additional forecasts. This could happen if, for example, a sensor malfunctioned and you were unable to collect data, or if you did not have a high-frequency sensor and were only able to collect 1-2 observations per month. In the absence of additional observations, the daily forecast model will simply use previous day's forecast as the initial condition for the current forecast.
 
-First, we will decide how many days we would like to forecast
+First, we will specify how many days we would like to forecast
 ```{r}
 days_to_forecast = 10
 ```
@@ -506,12 +682,12 @@ forecast_dates <- seq.Date(from = as.Date(forecast_start_date), to = as.Date(for
 
 ```
 
-Next, we need to specify how often we want the forecast model to assimilate data. For this first series of forecasts, we want to see what happens when no data is assimilated during the forecast period (which is 10 days). So, we will set the `chla_assimilation_frequency` to 11 days, ensuring that no data will be assimilated during the forecast period.
+Next, we need to specify how often we want the forecast model to assimilate data. For this first series of forecasts, we want to see what happens when no data is assimilated during the forecast period (which is 10 days). So, we will set the `chla_assimilation_frequency` to 11 days, ensuring that no data will be assimilated during the 10-day forecast period.
 ```{r}
 chla_assimilation_frequency = 11
 ```
 
-Just before we run the forecast, we need to format our lake data to play nicely with our forecasting function. First, we will create a vector that we will use as an index to be sure that we only provide the model with the chlorophyll-a data that we want to assimilate (in this case, only the observation on the first day of the forecast period will be provided as the initial condition for the forecast). Then, we will manipulate our lake data to create a `forecast_data` dataframe.
+Just before we run the forecast, we need to format our lake data to play nicely with our forecasting function. First, we will create a vector (`chla_assimilation_dates`) that we will use as an index to be sure that we only provide the model with the chlorophyll-a data that we want to assimilate. In this case, only the observation on the first day of the forecast period will be provided as the initial condition for the forecast. Then, we will manipulate our lake data to create a `forecast_data` dataframe, which is the data that will be provided to the model for forecasting.
 ```{r}
   chla_assimilation_dates <- forecast_dates[seq(1, length(forecast_dates), chla_assimilation_frequency)]
   
@@ -521,11 +697,12 @@ Just before we run the forecast, we need to format our lake data to play nicely 
     filter(datetime %in% forecast_dates) %>%
     mutate(chla = ifelse(datetime %in% chla_assimilation_dates,chla,NA)) 
 ```
+
 #### Run the forecast!!
 
-For convenience, we'll use a custom function to do this. If you'd like to learn more about what is "under the hood" of this custom functions to apply these concepts to your own research, you can find the source code for it in the `Rmd_functions.R` script associated with this teaching module.
+For convenience and to avoid getting lost in the details, we'll use a custom function to generate our forecasts. Later on, if you'd like to learn more about what is "under the hood" of this custom function, you can find the source code for it in the `Rmd_functions.R` script associated with this teaching module.
 
-The arguments to our custum `run_forecasts()` function are as follows:
+The arguments to our custom `run_forecasts()` function are as follows:
 
 1. `n_en` is the number of ensemble members we want to simulate
 2. `start` is the start date of the forecast

@@ -273,8 +273,6 @@ run_forecasts = function(n_en = 30,
       }
       
       
-      #####end of hack######################################
-      
     # check if there are any observations to assimilate 
     if(any(!is.na(obs[ , , t]))){
       Y_ic = kalman_filter(Y = Y_ic,
