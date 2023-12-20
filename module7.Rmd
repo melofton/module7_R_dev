@@ -46,20 +46,23 @@ More frequent observations allow us to update our forecast models more often, po
 
 In this module, we will generate one-day-ahead forecasts of lake chlorophyll-a. First, we will generate forecasts that do not assimilate any data. This will involve the following steps:  
 
-1. Read in and visualize chlorophyll-a data from Lake Barco, FL, USA.  
-2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
-3. Fit an autoregressive forecast model.   
-4. Generate a one-day-ahead forecast with uncertainty.
+#### Activity A
+Objective 1. Read in and visualize chlorophyll-a data from Lake Barco, FL, USA.  
+Objective 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
+Objective 3. Fit an autoregressive forecast model.   
+Objective 4. Generate a one-day-ahead forecast with uncertainty.
 
 Next, we will explore the effect of **data assimilation** on forecast output.  
 
-5. Compare one-day-ahead forecasts generated with and without data assimilation. 
-6. Compare one-day-ahead forecasts generated with data assimilation, using data with low vs. high observation uncertainty.
-7. Compare a series of one-day-ahead forecasts with no data assimilation, weekly data assimilation, and daily data assimilation. 
+#### Activity B
+Objective 5. Compare one-day-ahead forecasts generated with and without data assimilation. 
+Objective 6. Compare one-day-ahead forecasts generated with data assimilation, using data with low vs. high observation uncertainty.
+Objective 7. Compare a series of one-day-ahead forecasts with no data assimilation, weekly data assimilation, and daily data assimilation. 
 
 Finally, you will be asked to apply what you have learned about how data collection frequency and observation uncertainty affect data assimilation to improve forecast accuracy.
 
-8. Optimize data collection frequency and observation uncertainty for a series of 10 sequential 1-day-ahead forecasts.
+#### Activity C
+Objective 8. Optimize data collection frequency and observation uncertainty for a series of 10 sequential 1-day-ahead forecasts.
 
 There are a total of XX questions embedded throughout this module, many of which parallel (and in some cases are identical to) questions in the R Shiny app version of the module. Questions which are identical to those in the Shiny app will be indicated with **(Shiny)**, while questions unique to this RMarkdown will be indicated with **(Rmd)**. Note that question numbers will differ between the RMarkdown and the Shiny app, even if the question text is the same. Please see the module rubric for possible points per question and confirm with your instructor whether and how the module will be graded.  
 
@@ -88,9 +91,13 @@ We will also load some custom functions that are stored in the `Rmd_functions.R`
 # install.packages("tidyverse")
 # install.packages("lubridate")
 # install.packages("zoo")
+# install.packages("mvtnorm")
+# install.packages("see")
 library(tidyverse)
 library(lubridate)
 library(zoo)
+library(mvtnorm)
+library(see)
 
 source("./Rmd_functions.R")
 ```
@@ -629,6 +636,41 @@ plot_fc_1day(curr_chla, start_date, forecast_date, ic_distribution, forecast_chl
 
 
 To learn more about forecast uncertainty, you can explore Macrosystems EDDIE Module 6: Understanding Uncertainty in Ecological Forecasts, which is available both as an [R Shiny app](https://macrosystemseddie.shinyapps.io/module6/) and as an [RMarkdown](https://github.com/MacrosystemsEDDIE/module6_R).
+
+## Activity B
+
+## 5. Compare one-day-ahead forecasts generated with and without data assimilation.
+
+With data
+
+We are going to make predictions.
+```{r}
+#Build model predictions for each ensemble
+x_corr <- matrix(NA, nrow = n_members, ncol = 1)
+
+for(m in 1:n_members){
+  x_corr[m, ] = intercept + ar1 * (ic_distribution[m] - chla_mean) + chla_mean + process_distribution[m] 
+}
+```
+
+data for the specific "day" that we are forecasting
+```{r}
+y <- matrix(NA, ncol= 1, nrow = 1)
+y[1] <- 7.5 #Observed chl-a
+```
+
+
+Update the forecast using the new data
+```{r}
+x_update <- EnKF(x_corr, y, ic_sd)
+```
+
+Data wrangling to bind it all together for plotting
+HOW BEST TO DO THIS SO FUNCTION ARGUMENTS ARE TRACTABLE AND THERE ISN'T TOO MUCH WRANGLING CODE?
+```{r}
+
+```
+
 
 
 To do this in code, we will use a **for-loop**.

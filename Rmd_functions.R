@@ -6,288 +6,73 @@
 library(tidyverse)
 library(lubridate)
 library(zoo)
+library(mvtnorm)
+library(see) #see annotation below on how to avoid using this package if it becomes an issue
+
+##Notes on see package:
+#' This is literally only used for one plotting command: geom_violinhalf().
+#' To completely avoid use of this package, ctrl+F for geom_violinhalf() and
+#' replace with geom_violin() - VOILA!
 
 ## Define functions----
 
-### AR model related functions
-
-# can be used to calculate the significance threshold of an ACF or PACF object
-calculate_pacf_threshold <- function(x, ci=0.95, ci.type="white"){
-  #' Gets confidence limit data from acf object `x`
-  if (!ci.type %in% c("white", "ma")) stop('`ci.type` must be "white" or "ma"')
-  if (class(x) != "acf") stop('pass in object of class "acf"')
-  clim0 <- qnorm((1 + ci)/2) / sqrt(x$n.used)
-  if (ci.type == "ma") {
-    clim <- clim0 * sqrt(cumsum(c(1, 2 * x$acf[-1]^2))) 
-    return(clim[-length(clim)])
-  } else {
-    return(clim0)
-  }
-}
-
-
-### ENKF functions from Jake Zwart GLEON workshop---
-
-#### Function to create vector to hold states and parameters for updating---
-#' vector for holding states and parameters for updating
-#'
-#' @param n_states number of states we're updating in data assimilation routine
-#' @param n_params_est number of parameters we're calibrating
-#' @param n_step number of model timesteps
-#' @param n_en number of ensembles
-get_Y_vector = function(n_states, n_step, n_en){
+EnKF <- function(x_corr, y, ic_sd){
   
-  Y_ic = array(dim = c(n_states, n_step, n_en))
-  Y_pred = array(dim = c(n_states, n_step, n_en))
+  #Allocate matrices
+  h_matrix <- matrix(0, nrow = 1, ncol = 1)
+  R_matrix <- matrix(0, nrow = 1, ncol = 1)
+  dit <- matrix(NA, nrow = length(x_corr[,1]), ncol = 1) 
+  y_corr <- matrix(NA, nrow =  length(x_corr[,1]), ncol = length(y))
+  x_update <- matrix(NA, nrow = length(x_corr[,1]), ncol = 1)
   
-  return(list(Y_ic = Y_ic, Y_pred = Y_pred))
-}
-
-#### Function to create observation error matrix----
-#' observation error matrix, should be a square matrix where
-#'   col & row = the number of states and params for which you have observations
-#'
-#' @param n_states number of states we're updating in data assimilation routine
-#' @param n_param_obs number of parameters for which we have observations
-#' @param n_step number of model timesteps
-#' @param state_sd vector of state observation standard deviation; assuming sd is constant through time
-#' @param param_sd vector of parameter observation standard deviation; assuming sd is constant through time
-get_obs_error_matrix = function(n_states, n_step, state_sd){
-  
-  R = array(0, dim = c(n_states, n_states, n_step))
-  
-  state_var = state_sd^2 #variance of chl-a observations
-  
-  for(i in 1:n_step){
-    # variance is the same for each depth and time step; could make dynamic or varying by time step if we have good reason to do so
-    R[,,i] = diag(state_var, n_states, n_states)
-  }
-  
-  return(R)
-}
-
-#### Function to create matrix that identifies when observations are available----
-#' Measurement operator matrix saying 1 if there is observation data available, 0 otherwise
-#'
-#' @param n_states number of states we're updating in data assimilation routine
-#' @param n_param_obs number of parameters for which we have observations
-#' @param n_params_est number of parameters we're calibrating
-#' @param n_step number of model timesteps
-#' @param obs observation matrix created with get_obs_matrix function
-get_obs_id_matrix = function(n_states, n_step, obs){
-  
-  H = array(0, dim=c(n_states, n_states, n_step))
-  
-  # order goes 1) states, 2)params for which we have obs, 3) params for which we're estimating but don't have obs
-  
-  for(t in 1:n_step){
-    H[1:(n_states), 1:(n_states), t] = diag(ifelse(is.na(obs[,,t]),0, 1), n_states, n_states)
-  }
-  
-  return(H)
-}
-
-#### Function to turn observation dataframe into matrix----
-#' turn observation dataframe into matrix
-#'
-#' @param obs_df observation data frame
-#' @param model_dates dates over which you're modeling
-#' @param n_step number of model time steps
-#' @param n_states number of states we're updating in data assimilation routine
-#' @param states character string vector of state names in obs_file
-get_obs_matrix = function(obs_df, model_dates, n_step, n_states, states){
-  
-  # need to know location and time of observation
-  
-  obs_df_filtered = obs_df %>%
-    dplyr::filter(as.Date(datetime) %in% model_dates) %>%
-    mutate(date = as.Date(datetime)) %>%
-    select(date, chla) %>%
-    mutate(date_step = which(model_dates %in% date))
-  obs_matrix = array(NA, dim = c(n_states, 1, n_step))
-  for(i in 1:n_states){
-    for(j in obs_df_filtered$date_step){
-      obs_matrix[i, 1, j] = dplyr::filter(obs_df_filtered,
-                                          date_step == j) %>%
-        pull(states[i])
-    }}
-  
-  return(obs_matrix)
-}
-
-#### Kalman filter function----
-##' @param Y vector for holding states and parameters you're estimating
-##' @param R observation error matrix
-##' @param obs observations at current timestep
-##' @param H observation identity matrix
-##' @param n_en number of ensembles
-##' @param cur_step current model timestep
-kalman_filter = function(Y, R, obs, H, n_en, cur_step){
-  
-  cur_obs = obs[ , , cur_step]
-  
-  cur_obs = ifelse(is.na(cur_obs), 0, cur_obs) # setting NA's to zero so there is no 'error' when compared to estimated states
-  
-  ###### estimate the spread of your ensembles #####
-  Y_mean = matrix(mean(Y[ , cur_step, ], na.rm = TRUE), nrow = length(Y[ , 1, 1])) # calculating the mean of each temp and parameter estimate
-  delta_Y = Y[ , cur_step, ] - matrix(rep(Y_mean, n_en), nrow = length(Y[ , 1, 1])) # difference in ensemble state/parameter and mean of all ensemble states/parameters
-  
-  ###### estimate Kalman gain #########
-  K = ((1 / (n_en - 1)) * delta_Y %*% t(delta_Y) %*% t(H[, , cur_step])) %*%
-    qr.solve(((1 / (n_en - 1)) * H[, , cur_step] %*% delta_Y %*% t(delta_Y) %*% t(H[, , cur_step]) + R[, , cur_step]))
-  
-  ###### update Y vector ######
-  for(q in 1:n_en){
-    Y[, cur_step, q] = Y[, cur_step, q] + K %*% (cur_obs - H[, , cur_step] %*% Y[, cur_step, q]) # adjusting each ensemble using kalman gain and observations
-  }
-  return(Y)
-}
-
-#### Function to initialize state and parameter vector----
-#' initialize Y vector with draws from distribution of obs
-#'
-#' @param Y Y vector
-#' @param obs observation matrix
-initialize_Y = function(Y, obs, n_states_est, n_step, n_en, state_sd, yini){
-  
-  # initializing states with earliest observations and parameters
-  first_obs = yini 
-  
-  Y$Y_ic[ , 1, ] = array(abs(rnorm(n = n_en * (n_states_est),
-                                   mean = c(first_obs),
-                                   sd = c(state_sd))),
-                         dim = c(c(n_states_est), n_en))
-  
-  Y$Y_pred[ , 1, ] = array(abs(rnorm(n = n_en * (n_states_est),
-                                     mean = c(first_obs),
-                                     sd = c(state_sd))),
-                           dim = c(c(n_states_est), n_en))
-  
-  return(Y)
-}
-
-#### EnKF wrapper----
-#' wrapper for running EnKF 
-#' 
-#' @param n_en number of model ensembles 
-#' @param start start date of model run 
-#' @param stop date of model run
-#' @param forecast_data observation file 
-#' @param ic_sd coefficient of variation of observations 
-#' @param ic vector of initial conditions for states (chla)
-#' @param model R object of fitted autoregressive model
-#' @param residuals vector of residuals from model fit
-run_forecasts = function(n_en = 30, 
-                start = '2020-09-25', # start date 
-                stop = '2020-10-29', 
-                forecast_data = lake_data,
-                ic_sd = c(0.1),
-                ic = yini,
-                model = ar_model,
-                residuals = residuals){
-  
-  
-  n_en = n_en
-  start = as.Date(start)
-  stop = as.Date(stop)
-  dates = seq.Date(from = as.Date(start), to = as.Date(stop), by = "days")
-  n_step = length(dates)
-  ar_model = model
-  residuals = residuals
-  
-  # get observation matrix
-  obs_df = forecast_data %>% 
-    select(datetime, chla) 
-  
-  yini <- c( #initial estimate of chl-a
-    chla = ic[1]) #ug/L
-  
-  #define sds
-  state_sd = ic_sd
-  init_cond_sd = ic_sd
-
-  # setting up matrices
-  # observations as matrix
-  obs = get_obs_matrix(obs_df = obs_df,
-                       model_dates = dates,
-                       n_step = n_step,
-                       n_states = 1,
-                       states = "chla")
-  
-  # Y vector for storing state estimates and updates
-  Y = get_Y_vector(n_states = 1,
-                   n_step = n_step,
-                   n_en = n_en)
-  Y_ic = Y$Y_ic
-  Y_pred = Y$Y_pred
-  
-  # observation error matrix
-  R = get_obs_error_matrix(n_states = 1,
-                           n_step = n_step,
-                           state_sd = state_sd)
-  
-  # observation identity matrix
-  H = get_obs_id_matrix(n_states = 1,
-                        n_step = n_step,
-                        obs = obs)
-  
-  # initialize Y vector
-  Y = initialize_Y(Y = Y, obs = obs, n_states_est = 1,
-                   n_step = n_step, n_en = n_en, state_sd = init_cond_sd, yini = yini)
-  Y_ic = Y$Y_ic
-  Y_pred = Y$Y_pred
-  
-  if(any(!is.na(obs[ , , 1]))){
-    Y_ic = kalman_filter(Y = Y_ic,
-                         R = R,
-                         obs = obs,
-                         H = H,
-                         n_en = n_en,
-                         cur_step = 1) # updating params / states if obs available
-  }
-  
-  
-  # start modeling
-  for(t in 2:n_step){
+  #Only do EnKF if observations are present that day
+  #there has to be at least 1 non-NA observation.
+  if(length(which(!is.na(y))) > 0){
     
-    for(n in 1:n_en){
+    #Assign observations to depths
+    h_matrix[1, 1] <- 1
 
-      # pull parameter values from a distribution
-      ar1 = rnorm(n = 1, mean = ar_model$ar, sd = ar_model$asy.se.coef$ar)
-      chla_mean = rnorm(n = 1, mean = ar_model$x.mean, sd = ar_model$asy.se.coef$x.mean)
-      intercept = c(ar_model$x.intercept)
-      
-      # define sigma
-      sigma = sd(residuals, na.rm = TRUE)
-      
-      # draw process error value from a distribution
-      W = rnorm(n = 1, mean = 0, sd = sigma)
+    #Create observational uncertainty matrix
+    R_matrix[1,1] <- ic_sd^2
 
-      # run model; 
-      chla_pred <- intercept + ar1 * (Y_ic[1, t-1, n] - chla_mean) + chla_mean + W
+    #Calculate mean prediction for each depth
+    ens_mean <- colMeans(x_corr)
+    
+    #Loop through ensemble members
+    for(m in 1:length(x_corr[,1])){  
+      #Ensemble specific deviation
+      dit[m, ] <- x_corr[m, ] - ens_mean
       
-      # put prediction in Y matrices
-      Y_ic[1 , t, n] = chla_pred
-      Y_pred[1 , t, n] = chla_pred
-      
+      #if the first ensemble then create the matrix that is then averaged
+      if(m == 1){
+        p_it <- dit[m, ] %*% t(dit[m, ]) 
+      }else{
+        #if not the first ensemble then add the matrix to the previous matrix
+        p_it <- dit[m, ] %*% t(dit[m, ]) +  p_it 
       }
-      
-      
-    # check if there are any observations to assimilate 
-    if(any(!is.na(obs[ , , t]))){
-      Y_ic = kalman_filter(Y = Y_ic,
-                           R = R,
-                           obs = obs,
-                           H = H,
-                           n_en = n_en,
-                           cur_step = t) # updating params / states if obs available
     }
+    
+    #Calculate Cxx matrix
+    Cxx_matrix <- p_it / (length(x_corr[,1]) - 1)
+    
+    #Add noise to observations
+    for(m in 1:length(x_corr[,1])){
+      y_corr[m, ] <- y + t(rmvnorm(n = 1, mean = c(0), sigma = R_matrix))
+    }
+    
+    #Calculate Kalman Gain
+    K <- Cxx_matrix %*% t(h_matrix) %*% solve(h_matrix %*% Cxx_matrix %*% t(h_matrix) + R_matrix)
+    
+    #Update model states based on Kalman Gain and devivations
+    for(m in 1:length(x_corr[,1])){
+      x_update[m, ] <- x_corr[m,] + K %*% (y_corr[m,] - h_matrix %*% x_corr[m,])
+    }
+  }else{
+    #Only add noise if observations are missing
+    x_update <- x_corr
   }
-  out = list(Y_ic = Y_ic, Y_pred = Y_pred, dates = dates, R = R, obs_file = forecast_data, state_sd = state_sd)
-  
-  return(out)
+  return(x_update)
 }
-
 
 ### Plotting functions ----
 #### Function to plot NEON chl-a data----
@@ -404,6 +189,50 @@ plot_fc_1day <- function(curr_chla, start_date, forecast_date, ic_distribution, 
   
   ens <- tibble(date = c(rep(start_date, times = length(ic_distribution)),
                          rep(forecast_date, times = length(forecast_chla))),
+                ens = c(ic_distribution, forecast_chla),
+                ensemble_member = rep(1:n_members, times = 2))
+  ic <- ens %>%
+    filter(date == start_date)
+  fc <- ens %>%
+    filter(date == forecast_date)
+  obs <- tibble(date = start_date,
+                obs = curr_chla)
+  
+  p <- ggplot()+
+    geom_line(data = ens, aes(x = date, y = ens, group = ensemble_member, color = "Ensemble members"))+
+    geom_violinhalf(data = fc, aes(x = date, y = ens, fill = "Forecast"), color = "black",
+                scale = "width", width = 0.7)+
+    geom_violinhalf(data = ic, aes(x = date, y = ens, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_point(data = obs, aes(x = date, y = obs, color = "Observation"), size = 3)+
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    xlab("")+
+    theme_bw()+
+    theme(panel.grid.major.x = element_line(colour = "black", linetype = "dashed"),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_color_manual(values = c("Ensemble members" = "lightgray",
+                                  "Observation" = "orange"), 
+                       name = "",
+                       guide = guide_legend(override.aes = list(
+                         linetype = c("solid","blank"),
+                         shape = c(NA, 16))))+
+    scale_fill_manual(values = c("Forecast" = "white", "Initial condition" = "cornflowerblue"),
+                      name = "",
+                      guide = guide_legend(override.aes = list(
+                        color = c("black","cornflowerblue"))))+
+    ggtitle("1-day-ahead forecast")
+  
+  return(p)
+}
+
+#' One-day forecast plot
+#' 
+
+plot_fc_2day <- function(chla_obs, start_date, forecast_date1, forecast_date2, ic_distribution, forecast_chla1, forecast_chla2, n_members){
+  
+  ens <- tibble(date = c(rep(start_date, times = length(ic_distribution)),
+                         rep(forecast_date1, times = length(forecast_chla))),
                 ens = c(ic_distribution, forecast_chla),
                 ensemble_member = rep(1:n_members, times = 2))
   ic <- ens %>%
