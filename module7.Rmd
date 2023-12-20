@@ -44,23 +44,22 @@ More frequent observations allow us to update our forecast models more often, po
 
 ## Overview
 
-In this module, we will generate multiple one-day-ahead forecasts of lake chlorophyll-a. First, we will generate forecasts that do not assimilate any data. This will involve the following steps:  
+In this module, we will generate one-day-ahead forecasts of lake chlorophyll-a. First, we will generate forecasts that do not assimilate any data. This will involve the following steps:  
 
 1. Read in and visualize chlorophyll-a data from Lake Barco, FL, USA.  
 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
 3. Fit an autoregressive forecast model.   
-4. Specify a distribution of forecast **initial conditions** (starting conditions). 
-5. Generate forecasts with no data assimilation. 
-6. Assess forecast accuracy.    
+4. Generate a one-day-ahead forecast with uncertainty.
 
-Next, we will explore the effect of **data assimilation** on forecast accuracy by conducting two data assimilation experiments. First, we will assimilate data at different temporal frequencies (e.g., daily vs. weekly) and assess the effect on forecast accuracy. Second, we will assimilate data with different levels of observation uncertainty (e.g., high vs. low observation uncertainty) and assess the effect on forecast accuracy. 
+Next, we will explore the effect of **data assimilation** on forecast output.  
 
-7. Assimilate data at frequencies ranging from once a week to once a day.    
-8. Assess the effect of data assimilation frequency on forecast accuracy.    
-9. Assimilate data with different levels of observation uncertainty.   
-10. Assess the effect of observation uncertainty on forecast accuracy.   
+5. Compare one-day-ahead forecasts generated with and without data assimilation. 
+6. Compare one-day-ahead forecasts generated with data assimilation, using data with low vs. high observation uncertainty.
+7. Compare a series of one-day-ahead forecasts with no data assimilation, weekly data assimilation, and daily data assimilation. 
 
-Finally, you will be asked to summarize what you have learned about how to use data to improve ecological forecasts, and explain how data assimilation frequency and observation uncertainty are likely to affect forecast accuracy.
+Finally, you will be asked to apply what you have learned about how data collection frequency and observation uncertainty affect data assimilation to improve forecast accuracy.
+
+8. Optimize data collection frequency and observation uncertainty for a series of 10 sequential 1-day-ahead forecasts.
 
 There are a total of XX questions embedded throughout this module, many of which parallel (and in some cases are identical to) questions in the R Shiny app version of the module. Questions which are identical to those in the Shiny app will be indicated with **(Shiny)**, while questions unique to this RMarkdown will be indicated with **(Rmd)**. Note that question numbers will differ between the RMarkdown and the Shiny app, even if the question text is the same. Please see the module rubric for possible points per question and confirm with your instructor whether and how the module will be graded.  
 
@@ -353,18 +352,11 @@ ar1 = c(ar_model$ar)
 ar1
 ```
 
-Then, the (log-transformed) mean of chlorophyll-a:
+Then, the mean of chlorophyll-a:
 ```{r}
 chla_mean = c(ar_model$x.mean)
 chla_mean
 ```
-
-And finally, because there is uncertainty associated with both our data and the process of fitting a model to data, we can look at the standard errors of each of these parameters:
-```{r}
-params_se <- ar_model$asy.se.coef
-params_se
-```
-We will use these standard error values to account for uncertainty in our parameters when we make chlorophyll-a forecasts.
 
 **Q.15 Explain, in your own words, how the autoregressive model you have just fitted predicts chlorophyll-a.**
 
@@ -435,13 +427,10 @@ We will also save the **residuals** of our model, which are the differences betw
 residuals <- mod - model_data$chla
 ```
 
-## 4. Generate a deterministic forecast (without uncertainty).
+
+## 4. Generate a one-day-ahead forecast with uncertainty.
 
 Finally, we are ready to generate a forecast with our fitted model! 
-
-### What is a **deterministic forecast**?
-
-A deterministic forecast is one that does not account for any uncertainty associated with predictions.
 
 ### A note on shifting from model fitting to forecasting
 So far, we have fit our chlorophyll-a model using yesterday's chlorophyll-a to predict today's chlorophyll-a. 
@@ -451,7 +440,196 @@ Now, to forecast, we will need to make a subtle but important change in the way 
 $$Chla_{t+1} = \beta_0 + \beta_1 * (Chla_{t1} - \overline{Chla}) + \overline{Chla}$$
 Note the change in the subscripts of the Chla variables from t-1 to t and t to t+1!!
 
-To generate a forecast for many days into the future using our model, we will start by using today's observation to make a prediction for tomorrow, and then use the prediction for tomorrow to predict two days from now, and then use the prediction for two days from now to predict three days from now, and so on.
+To generate a forecast using our model, we use today's observation to make a prediction for tomorrow. But before we can do that, we need to calculate the uncertainty associated with our forecast.
+
+### What is ecological forecast uncertainty? 
+
+Forecast uncertainty is the range of possible alternate future conditions predicted by a model. We generate multiple different predictions of the future because the future is inherently unknown.  
+
+### Where does ecological forecast uncertainty come from?
+
+Uncertainty comes from natural variability in the environment, imperfect representation of an ecological system in a model, and error when measuring the system. When generating a forecast, uncertainty can come from the structure of the model used, the initial conditions of the model, the parameters of the model, and the data used to drive the model, among other sources.
+
+### Why is uncertainty important to quantify for an ecological forecast? 
+
+Knowing the uncertainty in a forecast allows forecast users to make informed decisions based on the range of forecasted outcomes and prepare accordingly.
+
+### What is an ensemble forecast?
+One way of accounting for uncertainty in forecasts is through an **ensemble forecast**. Ensemble forecasts are generated by running a model many times with different conditions. In our case, we will run our autoregressive model many times using different initial conditions and adding slightly different random noise (W) values to account for initial conditions and process uncertainty in the forecast. All the model runs together are referred to as the **ensemble**. Each individual model run is referred to as an **ensemble member**. Forecasters typically generate tens to hundreds of ensemble members to build uncertainty into their forecasts.  
+
+We will set the number of ensemble members we would like to have in our ensemble forecast.
+```{r}
+n_members = 500
+```
+
+
+**Q.XX** Explain, in your own words, what forecast uncertainty is and why it is important to account for uncertainty in forecasts.
+
+**Answer Q.XX**
+
+
+
+### Sources of forecast uncertainty
+
+Today, we will be accounting for two sources of forecast uncertainty: **initial conditions uncertainty** and **process uncertainty**.
+
+#### What are forecast **initial conditions**?
+
+**Initial conditions** are the starting conditions of your model when you generate a forecast. 
+
+#### What is **initial conditions uncertainty**?
+
+**Initial conditions uncertainty** refers to uncertainty arising because the current conditions in an ecosystem - in our case, lake chlorophyll-a - are not precisely known.
+
+Even though we have measurements of chlorophyll-a from our lake, we know that chlorophyll-a varies throughout the day so this measurement might not capture exactly the chlorophyll-a in our lake at this time. Additionally, there may be observation error in our chlorophyll-a measurements.
+
+To account for initial conditions uncertainty we can generate a distribution around the initial condition of chlorophyll-a and then run our model with slightly different initial conditions.
+
+
+**Q.19** What data from Lake Barco are needed to provide the initial condition for your forecast model? 
+
+**Answer Q.19**
+
+
+
+So far, we have been working with daily mean chlorophyll-a values from Lake Barco to fit our model and generate a deterministic forecast.
+
+Now, we will use some high-frequency (5-minute) chlorophyll-a data from our lake to estimate initial conditions uncertainty. For ease of visualization, we will only look at data from 2019-10-09 to 2019-10-12.
+```{r}
+high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
+  mutate(date = date(datetime),
+         time = hms::as_hms(datetime)) %>%
+  filter(date >= "2019-10-09" & date <= "2019-10-12")
+```
+We can look at variability in this 5-minute data over the course of a day to get a visual understanding of the daily variability in chlorophyll-a. Each colored line in the plot below represents a different day of chl-a data from midnight to midnight. 
+```{r}
+ggplot(data = high_frequency_data)+
+  geom_line(aes(x = time, y = chla, group = date, color = as.factor(date)))+
+  theme_bw()+
+  labs(color = "Date")+
+  xlab("Hour of day")+
+  ylab("Chlorophyll-a (ug/L)")
+```
+
+**Q.20** Examine the plot of high-frequency chlorophyll-a data. How variable is chlorophyll-a over the course of a day? 
+
+**Answer Q.20**
+
+
+
+**Q.21** Recall that we are using the daily mean of chlorophyll-a as the initial condition for our model. Given the daily variability that you see in the high-frequency chlorophyll-a data, do you think that using a daily mean is a good representation of daily chlorophyll-a in Lake Barco? Explain your reasoning.
+
+**Answer Q.21**
+
+
+
+
+Next, we will calculate the mean daily standard deviation of chl-a measurements (`ic_sd`), which we will use to estimate uncertainty in our initial conditions. 
+```{r}
+ic_sd_dataframe <- high_frequency_data %>%
+  group_by(date) %>%
+  summarize(daily_sd_chla = sd(chla, na.rm = TRUE))
+  
+ic_sd <- mean(ic_sd_dataframe$daily_sd_chla, na.rm = TRUE)
+ic_sd
+```
+
+
+Now, we can generate a distribution of initial conditions for our forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation in units of ug/L calculated from high-frequency data from Lake Barco (`ic_sd`).
+
+To do this, we will use the `rnorm()` function, which takes `n` draws from a normal distribution with a `mean` and `sd` specified as arguments to the function.
+```{r}
+curr_chla <- lake_data %>%
+  filter(datetime == forecast_start_date) %>%
+  pull(chla)
+
+ic_distribution <- rnorm(n = n_members, mean = curr_chla, sd = ic_sd)
+```
+
+Plot the distribution around your initial condition. This represents the **initial conditions uncertainty** of your forecast.
+```{r}
+plot_ic_dist(curr_chla, ic_distribution)
+```
+
+#### What is **process uncertainty** in an ecological forecast?
+
+Process uncertainty is uncertainty caused by our inability to model all processes as observed in the real world.
+
+Our 'simple' chlorophyll-a model uses today's chlorophyll-a to forecast tomorrow's chlorophyll-a. For example:
+
+$$Chla_{t+1} = \beta_0 + \beta_1 * (Chla_{t1} - \overline{Chla}) + \overline{Chla}$$ 
+But we know that chlorophyll-a can be affected by other processes as well (such as water temperature and the amount of available light and nutrients) and that our model has simplified or ignored these. To account for the uncertainty these simplifications introduce, we can add in process noise (W) at each time step. In this model, chlorophyll-a tomorrow is a function of today's chlorophyll-a plus some noise (W):
+
+$$Chla_{t+1} = \beta_0 + \beta_1 * (Chla_{t1} - \overline{Chla}) + \overline{Chla} + W$$
+where process noise is equal to a random number drawn from a normal distribution with a mean of zero and a standard deviation ($\sigma$).
+
+$$W \sim {\mathrm Norm}(0, \sigma)$$
+
+To account for process uncertainty, we can run the model multiple times with random noise added to each model run. More noise is associated with higher process uncertainty, and vice versa. But how much random noise should we add?
+
+To calculate process uncertainty, we will define the standard deviation of the process uncertainty distribution, `sigma` as the standard deviation of the residuals. This is the uncertainty left over after we found the best parameters for fitting the model.
+
+```{r}
+sigma <- sd(residuals, na.rm = TRUE) # Process Uncertainty Noise Std Dev.; this is your sigma
+```
+
+Use `rnorm()` your process uncertainty distribution, using 0 as the mean and `sigma` as the standard deviation.
+```{r}
+process_distribution <- rnorm(n = n_members, mean = 0, sd = sigma)
+```
+
+Plot the process uncertainty distribution. We will use this distribution to account for uncertainty in our forecast.
+```{r}
+plot_process_dist(process_distribution)
+```
+
+Finally, we are ready to use our autoregressive model to generate a one-day-ahead forecast with uncertainty. Notice that we are using our initial condition and process uncertainty distributions to account for uncertainty in our forecast.
+```{r}
+forecast_chla = intercept + ar1 * (ic_distribution - chla_mean) + chla_mean + process_distribution
+```
+
+Let's take a look at our forecast for tomorrow with uncertainty!
+```{r}
+plot_fc_dist(forecast_chla)
+```
+
+
+To prepare you for our next activity, let's visualize this forecast in a different way, using a customized plotting function. We will use plots very similar to this one to help explain the process of data assimilation later on.
+
+First we will define some arguments for the function:
+1. `start_date` date forecast is generated
+2. `forecast_date` date being forecasted
+```{r}
+start_date <- "2020-09-25" 
+forecast_date <- "2020-09-26"
+```
+
+Plot the forecast.
+```{r}
+plot_fc_1day(curr_chla, start_date, forecast_date, ic_distribution, forecast_chla, n_members)
+```
+
+**Q.XX** What is the forecasted chlorophyll-a concentration for Sept. 26, 2020? 
+
+*Hint: Remember, because forecasts are uncertain, there is not one single correct value for forecasted chlorophyll-a.*
+
+**Answer Q.XX**
+
+
+
+**Q.XX** What is the relationship between the observed chlorophyll-a for Sept. 25, 2020, and the initial condition distribution (shown in blue)?
+
+**Answer Q.XX**
+
+
+
+**Q.XX** Each one of the gray lines in the figure above represents an ensemble member. Explain what this means in your own words, with specific reference to the autoregressive model we are using for forecasting in this exercise.
+
+**Answer Q.XX**
+
+
+To learn more about forecast uncertainty, you can explore Macrosystems EDDIE Module 6: Understanding Uncertainty in Ecological Forecasts, which is available both as an [R Shiny app](https://macrosystemseddie.shinyapps.io/module6/) and as an [RMarkdown](https://github.com/MacrosystemsEDDIE/module6_R).
+
 
 To do this in code, we will use a **for-loop**.
 
@@ -556,105 +734,8 @@ Just before we run the forecast, we need to format our lake data to play nicely 
 ```
 
 
-## 5. Generate a forecast with **initial conditions** uncertainty. 
-
-### What is ecological forecast uncertainty? 
-
-Forecast uncertainty is the range of possible alternate future conditions predicted by a model. We generate multiple different predictions of the future because the future is inherently unknown.  
-
-### Where does ecological forecast uncertainty come from?
-
-Uncertainty comes from natural variability in the environment, imperfect representation of an ecological system in a model, and error when measuring the system. When generating a forecast, uncertainty can come from the structure of the model used, the initial conditions of the model, the parameters of the model, and the data used to drive the model, among other sources.
-
-### Why is uncertainty important to quantify for an ecological forecast? 
-
-Knowing the uncertainty in a forecast allows forecast users to make informed decisions based on the range of forecasted outcomes and prepare accordingly.
-
-To learn more about forecast uncertainty, you can explore Macrosystems EDDIE Module 6: Understanding Uncertainty in Ecological Forecasts, which is available both as an [R Shiny app](https://macrosystemseddie.shinyapps.io/module6/) and as an [RMarkdown](https://github.com/MacrosystemsEDDIE/module6_R).
-
-### What are forecast **initial conditions**?
-
-**Initial conditions** are the starting conditions of your model when you generate a forecast. 
-
-### What is **initial conditions uncertainty**?
-
-**Initial conditions uncertainty** refers to uncertainty arising because the current conditions in an ecosystem - in our case, lake chlorophyll-a - are not precisely known.
-
-Even though we have measurements of chlorophyll-a from our lake, we know that chlorophyll-a varies throughout the day so this measurement might not capture exactly the chlorophyll-a in our lake at this time. Additionally, there may be observation error in our chlorophyll-a measurements.
-
-To account for initial conditions uncertainty we can generate a distribution around the initial condition of chlorophyll-a and then run our model with slightly different initial conditions.
-
-**Q.XX** Explain, in your own words, what forecast uncertainty is and why it is important to account for uncertainty in forecasts.
-
-**Answer Q.XX**
 
 
-
-
-**Q.19** What data from Lake Barco are needed to provide the initial condition for your forecast model? 
-
-**Answer Q.19**
-
-
-
-So far, we have been working with daily mean chlorophyll-a values from Lake Barco to fit our model and generate a deterministic forecast.
-
-Now, we will use some high-frequency (5-minute) chlorophyll-a data from our lake to estimate initial conditions uncertainty. For ease of visualization, we will only look at data from 2019-10-09 to 2019-10-12.
-```{r}
-high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
-  mutate(date = date(datetime),
-         time = hms::as_hms(datetime)) %>%
-  filter(date >= "2019-10-09" & date <= "2019-10-12")
-```
-We can look at variability in this 5-minute data over the course of a day to get a visual understanding of the daily variability in chlorophyll-a. Each colored line in the plot below represents a different day of chl-a data from midnight to midnight. 
-```{r}
-ggplot(data = high_frequency_data)+
-  geom_line(aes(x = time, y = chla, group = date, color = as.factor(date)))+
-  theme_bw()+
-  labs(color = "Date")+
-  xlab("Hour of day")+
-  ylab("Chlorophyll-a (ug/L)")
-```
-
-**Q.20** Examine the plot of high-frequency chlorophyll-a data. How variable is chlorophyll-a over the course of a day? 
-
-**Answer Q.20**
-
-
-
-**Q.21** Recall that we are using the daily mean of chlorophyll-a as the initial condition for our model. Given the daily variability that you see in the high-frequency chlorophyll-a data, do you think that using a daily mean is a good representation of daily chlorophyll-a in Lake Barco? Explain your reasoning.
-
-**Answer Q.21**
-
-
-
-
-Next, we will calculate the mean daily standard deviation of chl-a measurements (`ic_sd`), which we will use to estimate uncertainty in our initial conditions. 
-```{r}
-ic_sd_dataframe <- high_frequency_data %>%
-  group_by(date) %>%
-  summarize(daily_sd_chla = sd(chla, na.rm = TRUE))
-  
-ic_sd <- mean(ic_sd_dataframe$daily_sd_chla, na.rm = TRUE)
-ic_sd
-```
-
-
-Now, we can generate a distribution of initial conditions for our forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation in units of ug/L calculated from high-frequency data from Lake Barco (`ic_sd`).
-
-To do this, we will use the `rnorm()` function, which takes `n` draws from a normal distribution with a `mean` and `sd` specified as arguments to the function.
-```{r}
-curr_chla <- lake_data %>%
-  filter(datetime == forecast_start_date) %>%
-  pull(chla)
-
-ic_distribution <- rnorm(n = 1000, mean = curr_chla, sd = ic_sd)
-```
-
-Plot the distribution around your initial condition. 
-```{r}
-plot_ic_dist(curr_chla, ic_distribution)
-```
 
 Finally, to generate a forecast that accounts for initial conditions uncertainty, we will run our autoregressive model multiple times using different draws from this distribution as the initial condition for chlorophyll-a. A forecast that is generated using multiple runs of a model with slightly different conditions is called an **ensemble forecast**, and each model run is referred to as an **ensemble member**.
 ```{r}

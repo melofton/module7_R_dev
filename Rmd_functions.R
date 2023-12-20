@@ -359,9 +359,88 @@ plot_ic_dist <- function(curr_chla, ic_uc){
     ggtitle("Initial condition distribution")
 }
 
+#### Function to plot distribution of process uncertainty ----
+#'@param proc_uc vector draws from a distribution of proc uc
+#'
+plot_process_dist <- function(proc_uc){
+  
+  #Set colors
+  l.cols <- RColorBrewer::brewer.pal(8, "Set2")[-c(1, 2)] # Defining another custom color palette :-)
+  
+  #Build plot
+  ggplot() +
+    geom_vline(xintercept = 0) +
+    geom_density(aes(proc_uc), fill = l.cols[1], alpha = 0.3) +
+    xlab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")"))) +
+    ylab("Density") +
+    theme_bw(base_size = 18)+
+    ggtitle("Process uncertainty distribution")
+}
+
+#### Function to plot distribution of a forecast ----
+#'@param forecast_dist vector of forecast distribution
+#'
+plot_fc_dist <- function(forecast_dist){
+  
+  #Set colors
+  l.cols <- RColorBrewer::brewer.pal(8, "Set2")[-c(1, 2)] # Defining another custom color palette :-)
+  #Build plot
+  ggplot() +
+    geom_density(aes(forecast_dist), fill = l.cols[3], alpha = 0.3) +
+    xlab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")"))) +
+    ylab("Density") +
+    theme_bw(base_size = 18)+
+    ggtitle("Chl-a forecast distribution")
+}
+
 
 
 #### Functions to plot chl-a forecast----
+
+#' One-day forecast plot
+#' 
+
+plot_fc_1day <- function(curr_chla, start_date, forecast_date, ic_distribution, forecast_chla, n_members){
+  
+  ens <- tibble(date = c(rep(start_date, times = length(ic_distribution)),
+                         rep(forecast_date, times = length(forecast_chla))),
+                ens = c(ic_distribution, forecast_chla),
+                ensemble_member = rep(1:n_members, times = 2))
+  ic <- ens %>%
+    filter(date == start_date)
+  fc <- ens %>%
+    filter(date == forecast_date)
+  obs <- tibble(date = start_date,
+                obs = curr_chla)
+  
+  p <- ggplot()+
+    geom_line(data = ens, aes(x = date, y = ens, group = ensemble_member, color = "Ensemble members"))+
+    geom_violin(data = fc, aes(x = date, y = ens, fill = "Forecast"), color = "black",
+                scale = "width", width = 0.7)+
+    geom_violin(data = ic, aes(x = date, y = ens, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_point(data = obs, aes(x = date, y = obs, color = "Observation"), size = 3)+
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    xlab("")+
+    theme_bw()+
+    theme(panel.grid.major.x = element_line(colour = "black", linetype = "dashed"),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_color_manual(values = c("Ensemble members" = "lightgray",
+                                  "Observation" = "orange"), 
+                       name = "",
+                       guide = guide_legend(override.aes = list(
+                         linetype = c("solid","blank"),
+                         shape = c(NA, 16))))+
+    scale_fill_manual(values = c("Forecast" = "white", "Initial condition" = "cornflowerblue"),
+                      name = "",
+                      guide = guide_legend(override.aes = list(
+                        color = c("black","cornflowerblue"))))+
+    ggtitle("1-day-ahead forecast")
+  
+  return(p)
+}
+
 #' plot chlorophyll forecast and observations 
 #' 
 #' @param est_out forecast output from EnKF wrapper 
