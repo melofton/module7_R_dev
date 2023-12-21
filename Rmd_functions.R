@@ -77,18 +77,6 @@ EnKF <- function(x_corr, y, ic_sd){
 ### Plotting functions ----
 #### Function to plot NEON chl-a data----
 
-# Plot chl-a data 
-#' @param lake_data NEON lake dataset 
-plot_chla_obs <- function(lake_data){
-  p <- ggplot(data = lake_data, aes(x = datetime, y = chla))+
-    geom_line(aes(color = "Chl-a"))+
-    xlab("")+
-    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
-    scale_color_manual(values = c("Chl-a" = "chartreuse4"), name = "")+
-    theme_bw()
-  return(p)
-}
-
 # Plot chl-a data + 1 day lag: timeseries
 #' @param plot_data chlorophyll-a dataframe with datetime, chla and chla_lag
 
@@ -108,13 +96,13 @@ plot_chla_lag <- function(plot_data){
 #### Function to plot AR model fit ----
 #' @param model_fit_plot_data data frame of lake observations and model predictions
 #'  
-plot_mod_predictions_chla <- function(model_fit_plot_data){
+plot_mod_predictions <- function(model_fit_plot_data, variable_name){
   cols <- RColorBrewer::brewer.pal(8, "Dark2") # Set custom color palette for our plot - ooh we are fancy!! :-)
   
   ggplot(data = model_fit_plot_data) +
     geom_point(aes(date, chla, color = "Observed")) +
     geom_line(aes(date, model, color = "Modeled")) +
-    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")"))) +
+    ylab(variable_name) +
     xlab("Time") +
     scale_color_manual(values = c( "Observed" = "black", "Modeled" = cols[4]),
                        name = "",
@@ -229,24 +217,27 @@ plot_fc_1day <- function(curr_chla, start_date, forecast_date, ic_distribution, 
 #' One-day forecast plot
 #' 
 
-plot_fc_2day <- function(chla_obs, start_date, forecast_date1, forecast_date2, ic_distribution, forecast_chla1, forecast_chla2, n_members){
+plot_fc_update <- function(chla_obs, start_date, forecast_date, ic_distribution, ic_update, forecast_chla, n_members){
   
   ens <- tibble(date = c(rep(start_date, times = length(ic_distribution)),
-                         rep(forecast_date1, times = length(forecast_chla))),
-                ens = c(ic_distribution, forecast_chla),
-                ensemble_member = rep(1:n_members, times = 2))
+                         rep(forecast_date, times = length(forecast_chla)*2)),
+                ens = c(ic_distribution, forecast_chla, ic_update),
+                ensemble_member = rep(1:n_members, times = 3),
+                data_type = c(rep("ic", times = length(ic_distribution)),
+                              rep("fc", times = length(forecast_chla)),
+                              rep("ic", times = length(ic_update))))
   ic <- ens %>%
-    filter(date == start_date)
+    filter(data_type == "ic")
   fc <- ens %>%
-    filter(date == forecast_date)
-  obs <- tibble(date = start_date,
-                obs = curr_chla)
+    filter(data_type == "fc")
+  obs <- tibble(date = c(start_date, forecast_date),
+                obs = chla_obs)
   
   p <- ggplot()+
     geom_line(data = ens, aes(x = date, y = ens, group = ensemble_member, color = "Ensemble members"))+
-    geom_violin(data = fc, aes(x = date, y = ens, fill = "Forecast"), color = "black",
+    geom_violinhalf(data = fc, aes(x = date, y = ens, fill = "Forecast"), color = "black",
                 scale = "width", width = 0.7)+
-    geom_violin(data = ic, aes(x = date, y = ens, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_violinhalf(data = ic, aes(x = date, y = ens, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
     geom_point(data = obs, aes(x = date, y = obs, color = "Observation"), size = 3)+
     ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
     xlab("")+
@@ -266,6 +257,144 @@ plot_fc_2day <- function(chla_obs, start_date, forecast_date1, forecast_date2, i
                       guide = guide_legend(override.aes = list(
                         color = c("black","cornflowerblue"))))+
     ggtitle("1-day-ahead forecast")
+  
+  return(p)
+}
+
+plot_second_forecast <- function(chla_obs, start_date, forecast_dates, ic_distribution, ic_update, forecast_chla, second_forecast, n_members){
+  
+  ens <- tibble(date = c(rep(start_date, times = length(ic_distribution)),
+                         rep(forecast_dates[1], times = length(forecast_chla)*2),
+                         rep(forecast_dates[2], times = length(second_forecast))),
+                ens = c(ic_distribution, forecast_chla, ic_update, second_forecast),
+                ensemble_member = rep(1:n_members, times = 4),
+                data_type = c(rep("ic", times = length(ic_distribution)),
+                              rep("fc", times = length(forecast_chla)),
+                              rep("ic", times = length(ic_update)),
+                              rep("fc", times = length(second_forecast))))
+  ic <- ens %>%
+    filter(data_type == "ic")
+  fc <- ens %>%
+    filter(data_type == "fc")
+  obs <- tibble(date = c(start_date, forecast_dates[1]),
+                obs = chla_obs)
+  
+  p <- ggplot()+
+    geom_line(data = ens, aes(x = date, y = ens, group = ensemble_member, color = "Ensemble members"))+
+    geom_violinhalf(data = fc, aes(x = date, y = ens, fill = "Forecast"), color = "black",
+                    scale = "width", width = 0.7)+
+    geom_violinhalf(data = ic, aes(x = date, y = ens, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_point(data = obs, aes(x = date, y = obs, color = "Observation"), size = 3)+
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    xlab("")+
+    theme_bw()+
+    theme(panel.grid.major.x = element_line(colour = "black", linetype = "dashed"),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_color_manual(values = c("Ensemble members" = "lightgray",
+                                  "Observation" = "orange"), 
+                       name = "",
+                       guide = guide_legend(override.aes = list(
+                         linetype = c("solid","blank"),
+                         shape = c(NA, 16))))+
+    scale_fill_manual(values = c("Forecast" = "white", "Initial condition" = "cornflowerblue"),
+                      name = "",
+                      guide = guide_legend(override.aes = list(
+                        color = c("black","cornflowerblue"))))+
+    ggtitle("1-day-ahead forecast")
+  
+  return(p)
+}
+
+plot_many_forecasts <- function(forecast_data, ens){
+
+  forecast_dates <- unique(ens$date)
+  ens <- ens %>%
+    mutate(datefactor = as.factor(format(date, "%m-%d")),
+           ens = ifelse((date == last(forecast_dates) & data_type == "ic"),NA,ens))
+  ic <- ens %>%
+    filter(data_type == "ic")
+  fc <- ens %>%
+    filter(data_type == "fc")
+  obs <- tibble(date = forecast_data$datetime,
+                obs = forecast_data$chla) %>%
+    mutate(datefactor = as.factor(format(date, "%m-%d")),
+           obs = ifelse(date == last(forecast_dates),NA,obs))
+  
+  p <- ggplot()+
+    geom_line(data = ens, aes(x = datefactor, y = ens, group = ensemble_member, color = "Ensemble members"))+
+    geom_violinhalf(data = fc, aes(x = datefactor, y = ens, fill = "Forecast"), color = "black",
+                    scale = "width", width = 0.7)+
+    geom_violinhalf(data = ic, aes(x = datefactor, y = ens, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_point(data = obs, aes(x = datefactor, y = obs, color = "Observations"), size = 3)+
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    xlab("")+
+    theme_bw()+
+    theme(panel.grid.major.x = element_line(colour = "black", linetype = "dashed"),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_color_manual(values = c("Ensemble members" = "lightgray",
+                                  "Observations" = "orange"), 
+                       name = "",
+                       guide = guide_legend(override.aes = list(
+                         linetype = c("solid","blank"),
+                         shape = c(NA, 16))))+
+    scale_fill_manual(values = c("Forecast" = "white", "Initial condition" = "cornflowerblue"),
+                      name = "",
+                      guide = guide_legend(override.aes = list(
+                        color = c("black","cornflowerblue"))))+
+    ggtitle("A series of 1-day-ahead forecasts")
+  
+  return(p)
+}
+
+plot_scenario_forecasts <- function(forecast_data, ens, show_final_obs=NULL){
+  
+  forecast_dates <- unique(ens$date)
+  ens <- ens %>%
+    mutate(datefactor = as.factor(format(date, "%m-%d")),
+           ens = ifelse((date == last(forecast_dates) & data_type == "ic"),NA,ens))
+  ic <- ens %>%
+    filter(data_type == "ic")
+  fc <- ens %>%
+    filter(data_type == "fc")
+  obs <- tibble(date = forecast_data$datetime,
+                obs = forecast_data$chla) %>%
+    mutate(datefactor = as.factor(format(date, "%m-%d")))
+  
+  if(is.null(show_final_obs)){
+    obs <- obs %>%
+      mutate(obs = ifelse(date == last(forecast_dates),NA,obs))
+  }
+  
+  p <- ggplot()+
+    geom_line(data = ens, aes(x = datefactor, y = ens, group = ensemble_member, color = "Ensemble members"))+
+    geom_violinhalf(data = fc, aes(x = datefactor, y = ens, fill = "Forecast"), color = "black",
+                    scale = "width", width = 0.7)+
+    geom_violinhalf(data = ic, aes(x = datefactor, y = ens, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_point(data = obs, aes(x = datefactor, y = obs, color = "Observations"), size = 3)+
+    geom_hline(aes(yintercept = 10, color = "Water quality threshold"))+
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    xlab("")+
+    theme_bw()+
+    theme(panel.grid.major.x = element_line(colour = "black", linetype = "dashed"),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_color_manual(values = c("Ensemble members" = "lightgray",
+                                  "Observations" = "orange",
+                                  "Water quality threshold" ="red"), 
+                       name = "",
+                       guide = guide_legend(override.aes = list(
+                         linetype = c("solid","blank","solid"),
+                         shape = c(NA, 16, NA))))+
+    scale_fill_manual(values = c("Forecast" = "white", "Initial condition" = "cornflowerblue"),
+                      name = "",
+                      guide = guide_legend(override.aes = list(
+                        color = c("black","cornflowerblue"))))+
+    ggtitle("A series of 1-day-ahead forecasts")
   
   return(p)
 }
