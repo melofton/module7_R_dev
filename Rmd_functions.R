@@ -16,9 +16,11 @@ library(see) #see annotation below on how to avoid using this package if it beco
 
 ## Define functions----
 
-EnKF <- function(x_corr, y, ic_sd){
+EnKF <- function(forecast, new_observation, ic_sd){
   
   #Allocate matrices
+  x_corr <- matrix(forecast)
+  y <- matrix(new_observation)
   h_matrix <- matrix(0, nrow = 1, ncol = 1)
   R_matrix <- matrix(0, nrow = 1, ncol = 1)
   dit <- matrix(NA, nrow = length(x_corr[,1]), ncol = 1) 
@@ -71,7 +73,9 @@ EnKF <- function(x_corr, y, ic_sd){
     #Only add noise if observations are missing
     x_update <- x_corr
   }
-  return(x_update)
+  
+  ic_update <- c(x_update[,1])
+  return(ic_update)
 }
 
 ### Plotting functions ----
@@ -302,20 +306,20 @@ plot_second_forecast <- function(chla_obs, start_date, forecast_dates, ic_distri
                       name = "",
                       guide = guide_legend(override.aes = list(
                         color = c("black","cornflowerblue"))))+
-    ggtitle("1-day-ahead forecast")
+    ggtitle("Two 1-day-ahead forecasts")
   
   return(p)
 }
 
-plot_many_forecasts <- function(forecast_data, ens){
+plot_many_forecasts <- function(forecast_data, forecast_series){
 
-  forecast_dates <- unique(ens$date)
-  ens <- ens %>%
+  forecast_dates <- unique(forecast_series$date)
+  forecast_series <- forecast_series %>%
     mutate(datefactor = as.factor(format(date, "%m-%d")),
-           ens = ifelse((date == last(forecast_dates) & data_type == "ic"),NA,ens))
-  ic <- ens %>%
+           chla = ifelse((date == last(forecast_dates) & data_type == "ic"),NA,chla))
+  ic <- forecast_series %>%
     filter(data_type == "ic")
-  fc <- ens %>%
+  fc <- forecast_series %>%
     filter(data_type == "fc")
   obs <- tibble(date = forecast_data$datetime,
                 obs = forecast_data$chla) %>%
@@ -323,10 +327,10 @@ plot_many_forecasts <- function(forecast_data, ens){
            obs = ifelse(date == last(forecast_dates),NA,obs))
   
   p <- ggplot()+
-    geom_line(data = ens, aes(x = datefactor, y = ens, group = ensemble_member, color = "Ensemble members"))+
-    geom_violinhalf(data = fc, aes(x = datefactor, y = ens, fill = "Forecast"), color = "black",
+    geom_line(data = forecast_series, aes(x = datefactor, y = chla, group = ensemble_member, color = "Ensemble members"))+
+    geom_violinhalf(data = fc, aes(x = datefactor, y = chla, fill = "Forecast"), color = "black",
                     scale = "width", width = 0.7)+
-    geom_violinhalf(data = ic, aes(x = datefactor, y = ens, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_violinhalf(data = ic, aes(x = datefactor, y = chla, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
     geom_point(data = obs, aes(x = datefactor, y = obs, color = "Observations"), size = 3)+
     ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
     xlab("")+
@@ -347,7 +351,54 @@ plot_many_forecasts <- function(forecast_data, ens){
                         color = c("black","cornflowerblue"))))+
     ggtitle("A series of 1-day-ahead forecasts")
   
-  return(p)
+  return(suppressWarnings(print(p)))
+}
+
+plot_many_forecasts_with_obs <- function(forecast_data, forecast_series, chla_observations){
+  
+  forecast_dates <- unique(forecast_series$date)
+  forecast_series <- forecast_series %>%
+    mutate(datefactor = as.factor(format(date, "%m-%d")),
+           chla = ifelse((date == last(forecast_dates) & data_type == "ic"),NA,chla))
+  ic <- forecast_series %>%
+    filter(data_type == "ic")
+  fc <- forecast_series %>%
+    filter(data_type == "fc")
+  obs_assim <- tibble(date = forecast_data$datetime,
+                obs = forecast_data$chla) %>%
+    mutate(datefactor = as.factor(format(date, "%m-%d")),
+           obs = ifelse(date == last(forecast_dates),NA,obs))
+  obs_not_assim <- chla_observations %>%
+    mutate(datefactor = as.factor(format(datetime, "%m-%d")))
+  
+  p <- ggplot()+
+    geom_line(data = forecast_series, aes(x = datefactor, y = chla, group = ensemble_member, color = "Ensemble members"))+
+    geom_violinhalf(data = fc, aes(x = datefactor, y = chla, fill = "Forecast"), color = "black",
+                    scale = "width", width = 0.7)+
+    geom_violinhalf(data = ic, aes(x = datefactor, y = chla, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_point(data = obs_not_assim, aes(x = datefactor, y = chla, color = "Obs. - not assimilated"), size = 3, shape = 21)+
+    geom_point(data = obs_assim, aes(x = datefactor, y = obs, color = "Obs. - assimilated"), size = 3)+
+    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    xlab("")+
+    theme_bw()+
+    theme(panel.grid.major.x = element_line(colour = "black", linetype = "dashed"),
+          panel.grid.major.y = element_blank(),
+          panel.grid.minor.y = element_blank(),
+          axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_color_manual(values = c("Ensemble members" = "lightgray",
+                                  "Obs. - not assimilated" = "black",
+                                  "Obs. - assimilated" = "orange"), 
+                       name = "",
+                       guide = guide_legend(override.aes = list(
+                         linetype = c("solid","blank", "blank"),
+                         shape = c(NA, 16, 21))))+
+    scale_fill_manual(values = c("Forecast" = "white", "Initial condition" = "cornflowerblue"),
+                      name = "",
+                      guide = guide_legend(override.aes = list(
+                        color = c("black","cornflowerblue"))))+
+    ggtitle("A series of 1-day-ahead forecasts")
+  
+  return(suppressWarnings(print(p)))
 }
 
 plot_scenario_forecasts <- function(forecast_data, ens, show_final_obs=NULL){
