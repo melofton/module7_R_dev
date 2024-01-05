@@ -55,8 +55,8 @@ Objective 4. Generate a one-day-ahead forecast with uncertainty.
 Next, we will explore the effect of **data assimilation** on forecast output.  
 
 #### Activity B
-Objective 5. Compare one-day-ahead forecasts generated with and without data assimilation. 
-Objective 6. Compare one-day-ahead forecasts generated with data assimilation, using data with low vs. high observation uncertainty.
+Objective 5. Compare one-day-ahead forecasts generated with and without data assimilation.  
+Objective 6. Compare one-day-ahead forecasts generated with data assimilation, using data with low vs. high observation uncertainty.  
 Objective 7. Compare a series of one-day-ahead forecasts with no data assimilation, weekly data assimilation, and daily data assimilation. 
 
 Then, you will be asked to apply what you have learned about how data collection frequency and observation uncertainty affect data assimilation to improve forecast accuracy.
@@ -67,7 +67,7 @@ Objective 8. Make management decisions using forecasts generated with different 
 Finally, you will have the opportunity to explore the effect of data assimilation on forecasts for a water quality variable of your choice.
 
 #### Independent coding activity
-Objective 9. Fit a model and calculate uncertainty for a different water quality variable.
+Objective 9. Fit a model and calculate uncertainty for a different water quality variable.  
 Objective 10. Determine the optimal frequency of data asssimilation for forecasts of your water quality variable.
 
 There are a total of 68 questions embedded throughout this module, many of which parallel (and in some cases are identical to) questions in the R Shiny app version of the module. Questions which are identical to those in the Shiny app will be indicated with **(Shiny)**, while questions unique to this RMarkdown will be indicated with **(Rmd)**. Note that question numbers will differ between the RMarkdown and the Shiny app, even if the question text is the same. Please see the module rubric for possible points per question and confirm with your instructor whether and how the module will be graded.  
@@ -1599,7 +1599,7 @@ plot_scenario_forecasts(forecast_data = scenario1_forecast_data, forecast_series
 plot_scenario_forecasts(forecast_data = scenario2_forecast_data, forecast_series = scenario2_forecast_series, show_final_obs = TRUE)
 ```
 
-**Q.57 Which forecast series - the one with weekly or daily data assimilation - provided a more accurate forecast for Saturday, Oct. 11? **
+**Q.57 Which forecast series - the one with weekly or daily data assimilation - provided a more accurate forecast for Saturday, Oct. 11?**
 
 **Answer Q.57**
 
@@ -1618,7 +1618,7 @@ First, you calculate these metrics for the forecast series that assimilates only
 Create the observation data frame for your forecast period.
 ```{r}
 scenario_chla_observations <- lake_data %>%
-  filter(datetime %in% forecast_dates)
+  filter(datetime %in% scenario_forecast_dates)
 ```
 
 Calculate the mean of each day's prediction for the forecast scenario with weekly data assimilation. 
@@ -1690,9 +1690,9 @@ You may choose between surface water temperature, dissolved oxygen, and surface 
 **Nitrogen** is an important nutrient for growth of phytoplankton, which form the base of the food web in aquatic ecosystems, and excessive nitrogen can also lead to harmful algal blooms.
 
 Alter the code below to read in the appropriate dataset:
-1. water temperature: BARC_wtemp_celsius.csv
-2. dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter.csv
-3. surface nitrogen: BARC_surfN_micromolesPerLiter.csv
+1. water temperature: BARC_wtemp_celsius.csv. 
+2. dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter.csv. 
+3. surface nitrogen: BARC_surfN_micromolesPerLiter.csv. 
 ```{r}
 lake_data <- read_csv("./data/neon/BARC_chla_microgramsPerLiter.csv", show_col_types = FALSE) %>%
   rename(datetime = Date, chla = V1) %>%
@@ -1791,9 +1791,9 @@ n_members = 500
 ```
 
 Alter the code to read in high-frequency data of your chosen water quality variable. Choose from:
-1. water temperature: BARC_wtemp_celsius_highFrequency.csv
-2. dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter_highFrequency.csv
-3. surface nitrogen: BARC_surfN_micromolesPerLiter_highFrequency.csv
+1. water temperature: BARC_wtemp_celsius_highFrequency.csv. 
+2. dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter_highFrequency.csv. 
+3. surface nitrogen: BARC_surfN_micromolesPerLiter_highFrequency.csv. 
 ```{r}
 high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
   mutate(date = date(datetime),
