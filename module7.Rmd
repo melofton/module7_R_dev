@@ -1690,9 +1690,11 @@ You may choose between surface water temperature, dissolved oxygen, and surface 
 **Nitrogen** is an important nutrient for growth of phytoplankton, which form the base of the food web in aquatic ecosystems, and excessive nitrogen can also lead to harmful algal blooms.
 
 Alter the code below to read in the appropriate dataset:
-1. water temperature: BARC_wtemp_celsius.csv. 
-2. dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter.csv. 
-3. surface nitrogen: BARC_surfN_micromolesPerLiter.csv. 
+
+1. water temperature: BARC_wtemp_celsius.csv.   
+2. dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter.csv.   
+3. surface nitrogen: BARC_surfN_micromolesPerLiter.csv.   
+
 ```{r}
 lake_data <- read_csv("./data/neon/BARC_chla_microgramsPerLiter.csv", show_col_types = FALSE) %>%
   rename(datetime = Date, chla = V1) %>%
@@ -1791,9 +1793,11 @@ n_members = 500
 ```
 
 Alter the code to read in high-frequency data of your chosen water quality variable. Choose from:
-1. water temperature: BARC_wtemp_celsius_highFrequency.csv. 
-2. dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter_highFrequency.csv. 
-3. surface nitrogen: BARC_surfN_micromolesPerLiter_highFrequency.csv. 
+
+1. water temperature: BARC_wtemp_celsius_highFrequency.csv.   
+2. dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter_highFrequency.csv.   
+3. surface nitrogen: BARC_surfN_micromolesPerLiter_highFrequency.csv.   
+
 ```{r}
 high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
   mutate(date = date(datetime),

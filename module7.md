@@ -1705,14 +1705,14 @@ bias_no_da <- mean(forecast_means_no_da$forecast_mean - chla_observations$chla, 
 bias_no_da
 ```
 
-    ## [1] -0.5713561
+    ## [1] -0.6263612
 
 ``` r
 rmse_no_da <- round(sqrt(mean((forecast_means_no_da$forecast_mean - chla_observations$chla)^2, na.rm = TRUE)), 2)
 rmse_no_da
 ```
 
-    ## [1] 0.74
+    ## [1] 0.78
 
 **Q.43 Use the values of bias and RMSE to assess the forecasts with no
 data assimilation. How well do you think the forecasts are performing?**
@@ -1858,14 +1858,14 @@ bias_weekly <- mean(forecast_means_weekly$forecast_mean - chla_observations$chla
 bias_weekly
 ```
 
-    ## [1] -0.4705635
+    ## [1] -0.5100623
 
 ``` r
 rmse_weekly <- round(sqrt(mean((forecast_means_weekly$forecast_mean - chla_observations$chla)^2, na.rm = TRUE)), 2)
 rmse_weekly
 ```
 
-    ## [1] 0.65
+    ## [1] 0.67
 
 **Q.47 Compare the values of bias and RMSE for forecasts with weekly
 data assimilation to the values of bias and RMSE for forecasts with no
@@ -2014,14 +2014,14 @@ bias_daily <- mean(forecast_means_daily$forecast_mean - chla_observations$chla, 
 bias_daily
 ```
 
-    ## [1] -0.1783386
+    ## [1] -0.1970486
 
 ``` r
 rmse_daily <- round(sqrt(mean((forecast_means_daily$forecast_mean - chla_observations$chla)^2, na.rm = TRUE)), 2)
 rmse_daily
 ```
 
-    ## [1] 0.59
+    ## [1] 0.6
 
 **Q.51 Compare the values of bias and RMSE for forecasts with daily data
 assimilation to the values of bias and RMSE for forecasts with weekly
@@ -2360,14 +2360,14 @@ scenario1_bias <- mean(scenario1_forecast_means$forecast_mean - scenario_chla_ob
 scenario1_bias
 ```
 
-    ## [1] -5.035654
+    ## [1] -5.112353
 
 ``` r
 scenario1_rmse <- round(sqrt(mean((scenario1_forecast_means$forecast_mean - scenario_chla_observations$chla)^2, na.rm = TRUE)), 2)
 scenario1_rmse
 ```
 
-    ## [1] 6.03
+    ## [1] 6.09
 
 Next, you calculate bias and RMSE for the forecast series with daily
 data assimilation from the high-frequency sensor.
@@ -2389,7 +2389,7 @@ scenario2_bias <- mean(scenario2_forecast_means$forecast_mean - scenario_chla_ob
 scenario2_bias
 ```
 
-    ## [1] -1.392428
+    ## [1] -1.369608
 
 ``` r
 scenario2_rmse <- round(sqrt(mean((scenario2_forecast_means$forecast_mean - scenario_chla_observations$chla)^2, na.rm = TRUE)), 2)
@@ -2448,10 +2448,11 @@ water chemistry.
 form the base of the food web in aquatic ecosystems, and excessive
 nitrogen can also lead to harmful algal blooms.
 
-Alter the code below to read in the appropriate dataset: 1. water
-temperature: BARC_wtemp_celsius.csv. 2. dissolved oxygen:
-BARC_dissolvedOxygen_milligramsPerLiter.csv. 3. surface nitrogen:
-BARC_surfN_micromolesPerLiter.csv.
+Alter the code below to read in the appropriate dataset:
+
+1.  water temperature: BARC_wtemp_celsius.csv.  
+2.  dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter.csv.  
+3.  surface nitrogen: BARC_surfN_micromolesPerLiter.csv.
 
 ``` r
 lake_data <- read_csv("./data/neon/BARC_chla_microgramsPerLiter.csv", show_col_types = FALSE) %>%
@@ -2597,10 +2598,12 @@ n_members = 500
 ```
 
 Alter the code to read in high-frequency data of your chosen water
-quality variable. Choose from: 1. water temperature:
-BARC_wtemp_celsius_highFrequency.csv. 2. dissolved oxygen:
-BARC_dissolvedOxygen_milligramsPerLiter_highFrequency.csv. 3. surface
-nitrogen: BARC_surfN_micromolesPerLiter_highFrequency.csv.
+quality variable. Choose from:
+
+1.  water temperature: BARC_wtemp_celsius_highFrequency.csv.  
+2.  dissolved oxygen:
+    BARC_dissolvedOxygen_milligramsPerLiter_highFrequency.csv.  
+3.  surface nitrogen: BARC_surfN_micromolesPerLiter_highFrequency.csv.
 
 ``` r
 high_frequency_data <- read_csv("./data/BARC_chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) %>%
@@ -2850,14 +2853,14 @@ bias <- mean(forecast_means$forecast_mean - variable_observations$chla, na.rm = 
 bias
 ```
 
-    ## [1] -0.5712405
+    ## [1] -0.5880159
 
 ``` r
 rmse <- round(sqrt(mean((forecast_means$forecast_mean - variable_observations$chla)^2, na.rm = TRUE)), 2) #edit this to be your chosen varible name!
 rmse
 ```
 
-    ## [1] 0.74
+    ## [1] 0.75
 
 **Q.67 Use the values of bias and RMSE to assess the forecasts with no
 data assimilation. How well do you think the forecasts are performing?**
