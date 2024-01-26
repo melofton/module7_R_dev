@@ -308,7 +308,7 @@ ggplot(data = pacf_plot_data, aes(x = Lag, y = Partial_ACF))+
 
 **Q.12 Examine the PACF plot. Which lag contributes the most to autocorrelation in the Lake Barco chlorophyll-a data? Explain how you know.**
 
-**Answer Q. 11**
+**Answer Q. 12**
 
 
 
@@ -510,7 +510,7 @@ To account for initial conditions uncertainty we can generate a distribution aro
 
 
 
-So far, we have been working with daily mean chlorophyll-a values from Lake Barco to fit our model and generate a deterministic forecast.
+So far, we have been working with daily mean chlorophyll-a values from Lake Barco to fit our model.
 
 Now, we will use some high-frequency (5-minute) chlorophyll-a data from our lake to estimate initial conditions uncertainty. For ease of visualization, we will only look at data from 2019-10-09 to 2019-10-12.
 ```{r}
@@ -718,7 +718,7 @@ second_forecast_date <- "2020-09-27"
 second_forecast = intercept + ar1 * (ic_update - chla_mean) + chla_mean + process_distribution
 ```
 
-Finally, we will plot both of our forecasts together with the initial conditions for each forecast. We will also plot the observation for 2020-09-27 so we can visually assess the accuracy of our second forecast.
+Finally, we will plot both of our forecasts together with the initial conditions for each forecast. 
 ```{r}
 forecast_dates = c(forecast_date, second_forecast_date) #vector of forecast dates
 plot_second_forecast(chla_obs, start_date, forecast_dates, ic_distribution, ic_update, forecast_chla, second_forecast, n_members)
@@ -1074,13 +1074,13 @@ Let's plot our series of 1-day-ahead forecasts with no data assimilation.
 plot_many_forecasts(forecast_data = forecast_data_no_da, forecast_series = forecast_series_no_da)
 ```
 
-**Q.40 Describe how the mean value of the 1-day-ahead forecasts changes over time when no data is assimilated.** 
+**Q.40 Describe how the mean value of the 1-day-ahead forecasts changes over time when no data are assimilated.** 
 
 **Answer Q.40**
 
 
 
-**Q.41 Describe how the uncertainty distribution of the 1-day-ahead forecasts changes over time when no data is assimilated.**
+**Q.41 Describe how the uncertainty distribution of the 1-day-ahead forecasts changes over time when no data are assimilated.**
 
 **Answer Q.41**
 
@@ -1582,7 +1582,7 @@ Plot forecast output.
 plot_scenario_forecasts(forecast_data = scenario2_forecast_data, forecast_series = scenario2_forecast_series)
 ```
 
-*Note: you may be wondering why the forecast and initial conditions distributions do not line up at all with some of the observations on this plot. In fact, this is a great illustration of one of the weaknesses of the ensemble Kalman filter - if the observation for a particular day falls completely outside the forecast distribution for that day, it is not possible for the ensemble Kalman filter to adjust the initial condition distribution enough to match the observation!*
+*Note: you may be wondering why the forecast and initial conditions distributions do not line up at all with some of the observations on this plot. In fact, this is a great illustration of one of the weaknesses of the ensemble Kalman filter - if the observation for a particular day falls completely outside the forecast distribution for that day, it is not always possible for the ensemble Kalman filter to adjust the initial condition distribution enough to match the observation!*
 
 **Q.56 Based on the forecasts presented here, as a manager, would you recommend a beach closure for Saturday, October 11?**
 
