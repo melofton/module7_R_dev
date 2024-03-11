@@ -5,7 +5,7 @@
 # Purpose: prepare data files and other ancillary code for RMarkdown version of Mod 7
 
 # Load packages
-pacman::p_load(tidyverse, lubridate, data.table, zoo, sparklyr, neonUtilities)
+pacman::p_load(tidyverse, lubridate, data.table, zoo, sparklyr, neonUtilities, hms)
 
 #define NEON token
 source("./neon_token_source.R")
@@ -350,3 +350,44 @@ nit_final <- nit_cleaned %>%
   filter(complete.cases(.))
 
 write.csv(nit_final, "./data/BARC_surfN_micromolesPerLiter_highFrequency.csv",row.names = FALSE)
+
+##### Re-wrangle high-frequency data to be "lab experiment" ##################
+chla <- read_csv("./module_admin/data/BARC_chla_microgramsPerLiter_highFrequency.csv") %>%
+  mutate(time = as_hms(ymd_hms(datetime)),
+         date = date(datetime)) %>%
+  filter(date >= "2019-10-09" & date <= "2019-10-12") %>%
+  group_by(date) %>%
+  mutate(day = cur_group_id()) %>%
+  ungroup() %>%
+  select(-date, -datetime)
+write.csv(chla,"./assignment/data/chla_microgramsPerLiter_highFrequency.csv",row.names = FALSE)
+
+do <- read_csv("./module_admin/data/BARC_DO_milligramsPerLiter_highFrequency.csv") %>%
+  mutate(time = as_hms(ymd_hms(datetime)),
+         date = date(datetime)) %>%
+  filter(date >= "2019-10-09" & date <= "2019-10-12") %>%
+  group_by(date) %>%
+  mutate(day = cur_group_id()) %>%
+  ungroup() %>%
+  select(-date, -datetime)
+write.csv(do,"./assignment/data/DO_milligramsPerLiter_highFrequency.csv",row.names = FALSE)
+
+surfn <- read_csv("./module_admin/data/BARC_surfN_micromolesPerLiter_highFrequency.csv") %>%
+  mutate(time = as_hms(ymd_hms(datetime)),
+         date = date(datetime)) %>%
+  filter(date >= "2019-10-09" & date <= "2019-10-12") %>%
+  group_by(date) %>%
+  mutate(day = cur_group_id()) %>%
+  ungroup() %>%
+  select(-date, -datetime)
+write.csv(surfn,"./assignment/data/surfN_micromolesPerLiter_highFrequency.csv",row.names = FALSE)
+
+wtemp <- read_csv("./module_admin/data/BARC_wtemp_celsius_highFrequency.csv") %>%
+  mutate(time = as_hms(ymd_hms(datetime)),
+         date = date(datetime)) %>%
+  filter(date >= "2019-10-09" & date <= "2019-10-12") %>%
+  group_by(date) %>%
+  mutate(day = cur_group_id()) %>%
+  ungroup() %>%
+  select(-date, -datetime)
+write.csv(wtemp,"./assignment/data/wtemp_celsius_highFrequency.csv",row.names = FALSE)
