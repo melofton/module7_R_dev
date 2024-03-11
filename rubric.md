@@ -1,12 +1,12 @@
-# Understanding Uncertainty in Ecological Forecasts: Detailed Rubric
+# Using Data to Improve Ecological Forecasts: Detailed Rubric
 
 The rubric below is intended as a template, to be modified by instructors for their specific course. Students should verify with instructors as to how the assignment is to be submitted and graded. Here, it is assumed that students are knitting their assignments as an html file.
 
-## Module weight: 30 pts
+## Module weight: 70 pts
 
-Note that module and question weights can be scaled depending on course needs (for example, all point values could be doubled for a module weight of 60 points, or just question weights can be doubled to put more emphasis on question responses rather than use of RMarkdown).
+Note that module and question weights can be scaled depending on course needs (for example, all point values could be halved for a module weight of 35 points, or just question weights could be doubled to put more emphasis on question responses rather than use of RMarkdown).
 
-- 1 pt per question for Questions 1-27 in module6.Rmd (total of 27 pts)
+- 1 pt per question for Questions 1-67 in module7.Rmd (total of 67 pts)
     - **0 pts**: no code or answer provided
     - **0.5 pts**: Code provided and includes at least one correct step but is not complete AND/OR (if text answer) response present but limited in depth of answer
     - **1 pt**: Correct code provided AND/OR insightful text answer provided that correctly describes patterns or addresses question.
