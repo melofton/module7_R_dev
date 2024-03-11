@@ -1,18 +1,24 @@
-# Macrosystems EDDIE Module 6: Understanding Uncertainty in Ecological Forecasts
+# Macrosystems EDDIE Module 7: Using Data to Improve Ecological Forecasts
+
+## This DOI needs to be updated when code published!
 [![DOI](https://zenodo.org/badge/611892158.svg)](https://zenodo.org/doi/10.5281/zenodo.10380339)    
-<a href="url"><img src="module_admin/Schematic_Draft_v3.png" align="right" height="220" width="269" ></a>
+<a href="url"><img src="module_admin/mod7_conceptual_figure.png" align="right" height="220" width="269" ></a>
 
 Ecological forecasting is a tool that can be used for understanding and predicting changes in populations, communities, and ecosystems. Ecological forecasting is an emerging approach that provides an estimate of the future state of an ecological system with uncertainty, allowing society to prepare for changes in important ecosystem services. 
 
-Forecast uncertainty is derived from multiple sources, including model parameters and driver data, among others. Knowing the uncertainty associated with a forecast enables forecast users to evaluate the forecast and make more informed decisions. Ecological forecasters develop and update forecasts using the iterative forecasting cycle, in which they make a hypothesis of how an ecological system works; embed their hypothesis in a model; and use the model to make a forecast of future conditions and quantify forecast uncertainty. There are several approaches that forecasters can use to reduce uncertainty, which will be explored in this module.  
+### Focal question for this module:   
 
-This module will guide students through an exploration of the sources of uncertainty within an ecological forecast, how uncertainty can be quantified, and steps that can be taken to reduce the uncertainty in a forecast students develop for a lake ecosystem.  
+**How can we use data to improve ecological forecasts?**
 
-This repository contains the RMarkdown version of Macrosystems EDDIE Module 6: Understanding Uncertainty in Ecological Forecasts. Instructional materials associated with teaching the module can be found [here](https://serc.carleton.edu/dev/eddie/teaching_materials/modules/module6.html). The module is also available as an [R Shiny application](https://macrosystemseddie.shinyapps.io/module6/) for students and instructors who wish to complete module activities without coding. 
+To be useful for management, ecological forecasts need to be both accurate enough for managers to be able to rely on them for decision-making and include a representation of forecast uncertainty, so managers can properly interpret the probability of future events. To improve forecast accuracy, we can update forecasts with observational data once they become available, a process known as **data assimilation**. Recent improvements in environmental sensor technology and an increase in the number of sensors deployed in ecosystems have increased the availability of data for assimilation to develop and improve forecasts for natural resource management. 
+
+In this module, you will explore how assimilating data with different amounts of observation uncertainty and at different temporal frequencies affects forecasts of water quality at a lake site of your choice. 
+
+This repository contains the RMarkdown version of Macrosystems EDDIE Module 7: Using Data to Improve Ecological Forecasts. Instructional materials associated with teaching the module can be found [here](https://serc.carleton.edu/dev/eddie/teaching_materials/modules/module7.html). The module is also available as an [R Shiny application](https://macrosystemseddie.shinyapps.io/module7/) for students and instructors who wish to complete module activities without coding. 
 
 ## Assignment
   
-All work for this assignment is in the `assignment` directory. Code is contained in the `module6_assignment.Rmd` notebook, and final rendered output files (`module6_assignment.html` and associated files) are in the `assignment` directory as well. The general rubric you will be graded on is found in the `rubric.md` file. 
+All work for this assignment is in the `assignment` directory. Code is contained in the `module7.Rmd` notebook, and final rendered output files (`module7.html`) will be generated in the `assignment` directory as well. The general rubric you will be graded on is found in the `rubric.md` file.  
   
 ## Other files
   
