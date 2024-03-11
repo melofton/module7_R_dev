@@ -1,0 +1,1910 @@
+---
+title: "Macrosystems EDDIE Module 7: Using Data to Improve Ecological Forecasts"
+author: "Mary Lofton, Tadhg Moore, Quinn Thomas, Cayelan Carey"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+## Purpose of this R Markdown
+
+This R Markdown contains code to reproduce the basic functionality of "Macrosystems EDDIE Module 7: Using Data to Improve Ecological Forecasts" outside of R Shiny. The code can be used by students to better understand what is happening "under the hood" of the Shiny app, which can be found at the following link:  
+https://macrosystemseddie.shinyapps.io/module7/. 
+
+Alternatively, students can complete this version of the module instead of the Shiny app version. 
+
+## Summary
+
+### Focal question for this module:   
+
+**How can we use data to improve ecological forecasts?**
+
+To be useful for management, ecological forecasts need to be both accurate enough for managers to be able to rely on them for decision-making and include a representation of forecast uncertainty, so managers can properly interpret the probability of future events. To improve forecast accuracy, we can update forecasts with observational data once they become available, a process known as **data assimilation**. Recent improvements in environmental sensor technology and an increase in the number of sensors deployed in ecosystems have increased the availability of data for assimilation to develop and improve forecasts for natural resource management. 
+
+In this module, you will explore how assimilating data with different amounts of observation uncertainty and at different temporal frequencies affects forecasts of water quality at a lake site of your choice.
+
+## Learning Outcomes
+1. Define data assimilation. (Activity A)    
+2. Generate an ecological forecast for primary productivity. (Activity A)    
+3. Describe how to assess ecological forecast accuracy. (Activity A)     
+4. Describe how data assimilation affects forecast accuracy and uncertainty. (Activity B)    
+5. Explain how updating models with data collected at different time scales (e.g., daily, weekly) and with different levels of associated uncertainty affects ecological forecasts. (Activity B, C)     
+
+## Key Concepts
+
+### What is data assimilation?
+
+Data assimilation is the process of updating models with data. In ecological forecasting, data assimilation is the process of updating ecological forecasting models with new environmental data as they become available.
+
+### How does the amount of uncertainty in model predictions and data affect the process of data assimilation?
+
+The amount of uncertainty in model predictions and data determines how much we adjust our forecasts based on new observations. If we observe a new data point and we have low observation uncertainty (i.e., high confidence in the accuracy of that observation), our forecast starting conditions will be adjusted to closely correspond to the new observation. If we observe a new data point and we have high observation uncertainty (i.e., low confidence in the accuracy of that observation), our forecast starting conditions will not be adjusted as much.
+
+### How does the frequency of observations affect data assimilation?
+
+More frequent observations allow us to update our forecast models more often, potentially improving forecast accuracy.
+
+If you would like to review key slides from the introductory presentation accompanying this module, you can do so by navigating to https://macrosystemseddie.shinyapps.io/module7/ and clicking on the 'Presentation' tab.
+
+## Overview
+
+In this module, we will generate one-day-ahead forecasts of lake chlorophyll-a. First, we will generate forecasts that do not assimilate any data. This will involve the following steps:  
+
+#### Activity A
+Objective 1. Read in and visualize chlorophyll-a data from Lake Barco, FL, USA.  
+Objective 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
+Objective 3. Fit an autoregressive forecast model.   
+Objective 4. Generate a one-day-ahead forecast with uncertainty.
+
+Next, we will explore the effect of **data assimilation** on forecast output.  
+
+#### Activity B
+Objective 5. Compare one-day-ahead forecasts generated with and without data assimilation.  
+Objective 6. Compare one-day-ahead forecasts generated with data assimilation, using data with low vs. high observation uncertainty.  
+Objective 7. Compare a series of one-day-ahead forecasts with no data assimilation, weekly data assimilation, and daily data assimilation. 
+
+Then, you will be asked to apply what you have learned about how data collection frequency and observation uncertainty affect data assimilation to improve forecast accuracy.
+
+#### Activity C
+Finally, you will have the opportunity to explore the effect of data assimilation on forecasts for a water quality variable of your choice.
+
+##### Independent coding activity
+Objective 8. Fit a model and calculate uncertainty for a different water quality variable.  
+Objective 9. Determine the optimal frequency of data assimilation for forecasts of your water quality variable.
+
+Example code is provided for Objectives 1-7, and you will be asked several short answer questions to interpret code output. Many of these short answer questions parallel (and in some cases are identical to) questions in the R Shiny app version of the module. Questions which are identical to those in the Shiny app will be indicated with **(Shiny)**, while questions unique to this RMarkdown will be indicated with **(Rmd)**. Note that question numbers will differ between the RMarkdown and the Shiny app, even if the question text is the same. Beginning in Objective 8, you will be guided to build on the module code by adjusting example code or developing your own code. Keep in mind that the example code is provided to help you, and use as much of it as you can in completing the questions embedded in Objective 8-9. There are a total of 67 questions. Please see the module rubric for possible points per question and confirm with your instructor whether and how the module will be graded.  
+
+## Think About It!
+
+**Q.1 (Shiny)** What is meant by the term 'data assimilation' in the context of ecological forecasting?
+
+**Answer Q.1**
+
+
+
+**Q.2 (Shiny)** How do you think the process of integrating the most recently observed data into models can improve forecasts?
+
+**Answer Q.2**
+
+
+## Set-up
+
+We will install and load some packages and functions that are needed to run the module code. 
+
+If you do not currently have the packages below downloaded for RStudio, you will need to install them first using the `install.packages()` function (uncomment the lines and install the packages).
+
+We will also load some custom functions that are stored in the `Rmd_functions.R` file using the `source()` function.
+
+```{r, echo=FALSE, message = FALSE, warning=FALSE}
+# install.packages("tidyverse")
+# install.packages("lubridate")
+# install.packages("zoo")
+# install.packages("mvtnorm")
+# install.packages("see")
+library(tidyverse)
+library(lubridate)
+library(zoo)
+library(mvtnorm)
+library(see)
+
+source("./R/EnKF_and_plot_functions.R")
+```
+
+## Objective 1. Read in and visualize data from Lake Barco, FL, USA
+
+Lake Barco is one of the lake sites in the U.S. National Ecological Observatory Network (NEON). Please refer to https://www.neonscience.org/field-sites/barc to learn more about this site.
+
+**Q.3 (Shiny)** Use the website linked above to fill out information about Lake Barco:
+
+**Answer Q.3**
+
+Four letter site identifier:  
+Latitude:  
+Longitude:  
+Lake area (km2):  
+Elevation (m):  
+
+### Chlorophyll-a in lakes
+
+**Chlorophyll-a** concentrations are an indicator of algal (phytoplankton) abundance and biomass in a lake. Phytoplankton are important primary producers at the base of the lake food web, and are therefore necessary for healthy lake ecosystem function. However, an overabundance of phytoplankton can lead to harmful **blooms.**
+
+Blooms compromise water quality via unsightly scums, clogging of filters at water treatment plants, release of noxious taste and odor compounds, and in some cases release of toxins that pose substantial risk to human and animal health. 
+
+Forecasts of chlorophyll-a concentrations days to weeks into the future can give water managers important information about the likelihood of a bloom event. This permits pre-emptive management to prevent or mitigate water quality concerns caused by blooms.
+
+**Q.4 (Shiny) Why might a forecast of lake chlorophyll-a concentration days to weeks into the future be a useful tool for water managers?**
+
+**Answer Q.4**
+
+
+
+Now we will read in and view lake chlorophyll-a data. 
+
+We will rename the columns of our dataframe, and filter the dataset to begin in 2019.
+
+Finally, we will use the `mutate()` function to set any chl-a values that are less than 0 due to sensor error to 0, as negative chl-a values (representing negative phytoplankton) are not actually possible.
+```{r}
+lake_data <- read_csv("./data/BARC_chla_microgramsPerLiter.csv", show_col_types = FALSE) %>%
+  rename(datetime = Date, chla = V1) %>%
+  filter(year(datetime) >= 2019) %>%
+  mutate(chla = ifelse(chla < 0, 0, chla))
+
+head(lake_data)
+```
+
+Plot a timeseries of chlorophyll-a observations at Lake Barco.
+```{r}
+ggplot(data = lake_data, aes(x = datetime, y = chla))+
+    geom_point(aes(color = "Chl-a"))+
+    xlab("")+
+    ylab(expression(paste("Chlorophyll-a (ug/L)")))+
+    scale_color_manual(values = c("Chl-a" = "chartreuse4"), name = "")+
+    theme_bw()
+```
+
+**Q.5 (Shiny) Describe how chlorophyll-a changes over time in Lake Barco. Do you notice any patterns or trends?**
+
+**Answer Q.5**
+
+
+## Objective 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
+### What is autocorrelation?    
+
+**Autocorrelation** is the correspondence between a value and previous values of that variable which have been recently observed. For example, mean daily air temperature over the course of a year exhibits autocorrelation, as today's mean daily air temperature is related to the mean daily air temperatures observed over the days and weeks prior to today. 
+
+The **incredibly useful** thing about autocorrelation from a forecasting perspective is that it allows us to use *previous or current observations* of a variable to predict *future values* of that variable - excellent!
+
+### What is a lag?  
+
+A **lag** is a particular amount of time that has passed between when we observe a value we are using as an explanatory, or independent, variable, and when we observe a value that we are trying to predict. For example, if you use today's air temperature to predict tomorrow's air temperature, you are using a 1-day lag of air temperature to predict tomorrow's air temperature. 
+
+You could also use a 2-day lag of air temperature (that would be the air temperature observed yesterday), or a 3-day lag, 4-day lag, and so on..... or some combination of all of those lags, to predict tomorrow's air temperature.
+
+In general, stronger relationships among lags of a variable leads to higher **autocorrelation** in a timeseries of that variable.
+
+**Q.6 (Shiny) Explain, in your own words, how autocorrelation in a variable can help forecasters make predictions of the future.** 
+
+**Answer Q.6**
+
+
+Let's explore lags and autocorrelation in chl-a data at Lake Barco.
+
+First, we need to do some data wrangling. We will `filter()` our dataset to only include data that are observed prior to our forecast date, which is 2020-09-25. These are the data we will eventually use to fit our forecast model.
+
+We will also linearly interpolate missing values in our chlorophyll-a data using the `na.approx()` function, and create a column of 1-day lagged values of chlorophyll-a using the `lag()` function. 
+
+Finally, we will double-check that we have no missing values in our dataset by using `complete.cases()` to eliminate rows with NA values. This is important because we cannot have NA values when we fit our forecasting model to our data later on.
+```{r}
+forecast_start_date <- "2020-09-25"
+
+autocorrelation_data <- lake_data %>%
+    filter(datetime < forecast_start_date) %>%
+    mutate(chla = na.approx(chla, na.rm = F)) %>% 
+    mutate(chla_lag = lag(chla)) %>%
+    filter(complete.cases(.))
+
+head(autocorrelation_data)
+```
+
+Next, we will create an example plot to illustrate the concept of a **lagged variable**. To make it easier to see the 1-day lag in chlorophyll-a on the figure, we will only plot data from the last four months in 2019.
+```{r}
+plot_data <- autocorrelation_data %>%
+  filter(datetime > "2019-09-01" & datetime < "2019-12-31")
+
+plot_chla_lag(plot_data)
+```
+
+**Q.7 (Shiny) Describe what you observe on the timeseries figure above. How do the two lines plotted on the timeseries (chlorophyll and 1 day lag of chlorophyll) relate to each other?** 
+
+**Answer Q.7**
+
+
+
+To visualize the relationship between chlorophyll and a 1 day lag of chlorophyll in a different way, we will also plot these two timeseries on a scatterplot. The dashed diagonal line represents the 1:1 line. The closer the points fall to this line, the stronger of the linear relationship between the independent variable (x axis) and the dependent variable (y axis).
+
+Note that now, we are plotting the complete model fitting dataset (2019-01-01 to 2020-09-25).
+```{r}
+ggplot(data = autocorrelation_data, aes(x = chla_lag, y = chla))+
+  geom_point()+
+  xlab(expression(paste("1 day lag of chlorophyll-a (",mu,g,~L^-1,")")))+
+  ylab(expression(paste("chlorophyll-a (",mu,g,~L^-1,")")))+
+  geom_abline(slope = 1, intercept = 0, linetype = 2)+
+  theme_bw()
+```
+
+**Q.8 (Shiny) Describe what you observe on the scatterplot figure above. Do you think the Lake Barco chlorophyll-a data exhibit autocorrelation? Why or why not?** 
+
+**Answer Q.8**
+
+ 
+
+In addition to visualizing autocorrelation, we can also calculate it. The autocorrelation between chlorophyll-a ($Chla$) and a 1-day lag of chlorophyll-a ($ChlaLag$) is represented by the following equation:
+
+$$Autocorrelation = \frac {\sum_{t = 2}^{T} (
+Chla - \overline{Chla}) * (
+ChlaLag - \overline{Chla})}{\sum_{t = 1}^{T} (
+Chla - \overline{Chla})^2}$$
+
+where $T$ is the timeseries of observations in the timeseries and $t$ represents which observation in that timeseries we are starting with (either the 1st or 2nd observation). Recall that the capital sigma $(\sum)$ indicates a sum and the overline $(\overline{Chla})$ indicates the mean.
+
+Autocorrelation can range from -1 to 1. The closer the autocorrelation is to -1 or 1, the stronger the correspondence between the variable and its lag. An autocorrelation value close to 1 means that the 1-day lag is positively correlated with today, while an autocorrelation value close to -1 means the the 1-day lag is negatively correlated with today. An autocorrelation close to 0 means there is little correspondence between the 1-day lag and today.
+
+We can calculate autocorrelation in code. Note that in the following calculation, the `[-1]` eliminates the first element of `autocorrelation_data$chla` or `autocorrelation_data$chla_lag` vectors, following the $t=2$ specification for the $\sum_{t = 2}^{T}$ function in the numerator of the autocorrelation equation above.
+```{r}
+autocorrelation_lag1 = round(sum((autocorrelation_data$chla[-1] - mean(autocorrelation_data$chla[-1]))*(autocorrelation_data$chla_lag[-1] - mean(autocorrelation_data$chla[-1])))/sum((autocorrelation_data$chla - mean(autocorrelation_data$chla))^2),3)
+
+autocorrelation_lag1
+```
+
+**Q.9 (Shiny) Interpret the value of `autocorrelation_lag1`; does this value indicate low or high autocorrelation between chlorophyll-a and a 1-day lag of chlorophyll-a?** 
+
+**Answer Q.9**
+
+
+Next, we can calculate and plot the autocorrelation values for many different lags of our chlorophyll-a data. Rather than doing this calculation step-by-step, we can use the `acf()` function to calculate the autocorrelation for many lags, and then plot them below.
+```{r}
+acf_list <- acf(autocorrelation_data$chla, plot = FALSE)
+
+acf_plot_data <- tibble(Lag = acf_list$lag,
+                        ACF = round(acf_list$acf, 2))
+
+ggplot(data = acf_plot_data, aes(x = Lag, y = ACF))+
+  geom_bar(stat = "identity")+
+  xlab("Lag in days")+
+  ylab("Autocorrelation")+
+  theme_bw()
+```
+
+**Q.10 (Shiny) Describe how autocorrelation changes as the lag in days increases. Why do you think this pattern occurs?** 
+
+**Answer Q.10**
+
+
+
+**Q.11 (Shiny) Imagine you are asked to develop a forecasting model that uses lagged values of chlorophyll-a to predict future chlorophyll-a. Examining the autocorrelation plot above, how many lags of chlorophyll-a would you include in your forecasting model? Provide your answer in days (e.g., I would include up to a 3-day lag) and explain your reasoning.**
+
+**Answer Q. 11**
+ 
+
+As you may have discovered while answering Q.11, it can be difficult to decide exactly how many lags to include in a forecasting model. Fortunately, forecasters have developed tools to help make this decision. One such tool is the **partial autocorrelation function**, or **PACF**. This function calculates the autocorrelation of a particular lag *while removing* the effects of indirect correlations with other lags. 
+
+To explain another way: the **autocorrelation** of chlorophyll-a and the 7-day lag of chlorophyll-a is affected by the autocorrelation of chlorophyll-a with the 1-day lag, the 2-day lag, the 3-day lag, and so on, as well as the relationship of the 7-day lag to the 1-day lag, the 2-day lag, the 3-day lag, and so on.
+
+The PACF avoids this problem. You can think of it as only measuring the effect of one particular set of lagged values (e.g., the 5-day lagged values), while accounting for (and thereby removing the influence of) all other lags. The **PACF ranges from -1 to 1, and can be interpreted in the same way as autocorrelation**, where PACF values close to -1 and 1 indicate strong correspondence of a lag with the current value, while PACF values close to 0 indicate low correspondence between a lag and the current value.
+
+To calculate the PACF, we can use the same `acf()` function, while adding the argument `type = c("partial")` to indicate that we'd like to calculate the partial autocorrelation function. 
+```{r}
+pacf_list <- acf(autocorrelation_data$chla, type = c("partial"), plot = FALSE)
+
+pacf_plot_data <- tibble(Lag = pacf_list$lag,
+                         Partial_ACF = round(pacf_list$acf, 2))
+head(pacf_plot_data)
+```
+
+Now, we can plot the PACF.
+
+```{r}
+ggplot(data = pacf_plot_data, aes(x = Lag, y = Partial_ACF))+
+  geom_bar(stat = "identity")+
+  xlab("Lag in days")+
+  ylab("Partial autocorrelation")+
+  theme_bw()
+```
+
+**Q.12 (Shiny) Examine the PACF plot. Which lag contributes the most to autocorrelation in the Lake Barco chlorophyll-a data? Explain how you know.**
+
+**Answer Q. 12**
+
+
+
+**Q.13 (Shiny) Once again, imagine you are asked to develop a forecasting model that uses lagged values of chlorophyll-a to predict future chlorophyll-a. Examining the PACF plot above, how many lags of chlorophyll-a would you include in your forecasting model? Provide your answer in days (e.g., I would include up to a 3-day lag) and explain your reasoning.**
+
+**Answer Q. 13**
+
+
+
+
+**Q.14 (Shiny) Did the number of lags you chose to include in your forecasting model change from Q.11 to Q.13? Why or why not?**
+
+**Answer Q. 14**
+
+
+
+
+## Objective 3. Fit an autoregressive forecast model.   
+
+### What is an autoregressive model?  
+
+An **autoregressive model** uses past and/or current values of a variable to predict future values. In our case, we are interested in using past and current values of lake chlorophyll-a to predict future chlorophyll-a.
+
+Run the following code chunk and examine the slides to learn more about autoregressive models.
+
+```{r, echo=FALSE, out.width = '80%'}
+knitr::include_graphics("./images/model_slides/Slide1.png")
+knitr::include_graphics("./images/model_slides/Slide2.png")
+knitr::include_graphics("./images/model_slides/Slide3.png")
+knitr::include_graphics("./images/model_slides/Slide4.png")
+knitr::include_graphics("./images/model_slides/Slide5.png")
+knitr::include_graphics("./images/model_slides/Slide6.png")
+```
+
+Today, we will fit a simple form of an autoregressive, or AR model, which uses yesterday's chlorophyll-a observation (so, a 1-day lag) to predict today's observation. This model can be written as:
+
+$$Chla_{t} = \beta_0 + \beta_1 * (Chla_{t-1} - \overline{Chla}) + \overline{Chla}$$
+where $Chla$ is our timeseries of chlorophyll-a data, $\beta_0$ is the intercept parameter, $\beta_1$ is the coefficient on the 1-day lag of chlorophyll-a, and $\overline{Chla}$ is the mean of the chlorophyll-a timeseries.
+
+Let's fit this model to our data!
+
+```{r}
+model_data <- autocorrelation_data 
+```
+
+To fit our model, we will use the `ar.ols()` function, which fits an autoregressive time series model to data by ordinary least squares. 
+
+While it's possible that including additional lags besides a 1-day lag might improve our predictions, for today, we will keep it simple and just use a 1-day lag (which we determined using the PACF is the lag with the highest autocorrelation). We will specify this by adding the `order.max = 1` argument to our function. 
+
+In addition, we will specify:
+
+1. `aic = FALSE` because we know we only want to use the first lag, we don't need to use the AIC, or Akaike Information Criterion, to help us choose how many lags to include
+2. `intercept = TRUE` we do want to fit an intercept term
+3. `demean = TRUE` we do want to subtract the mean
+
+```{r}
+ar_model <- ar.ols(model_data$chla, order.max = 1, aic = FALSE,
+                     intercept = TRUE, demean = TRUE)
+```
+
+Next, let's extract our model parameters and have a look at them.
+
+First, $\beta_0$, the intercept:
+
+```{r}
+intercept = c(ar_model$x.intercept)
+intercept
+```
+
+Next, $\beta_1$, the 1-day lag coefficient:
+
+```{r}
+ar1 = c(ar_model$ar)
+ar1
+```
+
+Then, the mean of chlorophyll-a:
+
+```{r}
+chla_mean = c(ar_model$x.mean)
+chla_mean
+```
+
+**Q.15 (Rmd) Explain, in your own words, how the autoregressive model you have just fitted predicts chlorophyll-a.**
+
+
+**Answer Q. 15**
+
+
+### How can we assess model fit?
+
+Before we use this model for forecasting, it is a good idea to see how well it fits our data. We will use three methods for doing this:
+
+1. Visual observation of model predictions vs. observations. This is a simple but effective method. The closer your model predictions fall to your observations, the better the model fit.
+2. **Bias**: Bias is the mean difference between model predictions and observations. The smaller the absolute value of the bias, the better your model fit.
+3. **Root mean square error (RMSE)**: RMSE is the mean sum of squared errors (differences between predictions and observations), and can be calculated as:
+
+$$RMSE = \sqrt{\frac{\sum_{i=1}^{N}(Predicted_i - Observed_i)^2}{N}}$$
+The closer the RMSE is to 0, the better your model fit.
+
+First, let's use our fitted model to generate predictions.
+
+```{r}
+mod <- intercept + ar1 * (model_data$chla - chla_mean) + chla_mean
+```
+
+Next, we will create a data frame for plotting.
+
+```{r}
+model_fit_plot_data <- tibble(date = model_data$datetime,
+                              chla = model_data$chla,
+                              model = mod)
+```
+
+Now, we can assess our model visually. We will plot the model predictions and observations.
+
+```{r}
+plot_mod_predictions(model_fit_plot_data, variable_name = "Chlorophyll-a (ug/L)")
+```
+
+**Q.16 (Shiny) Use the plot above to assess the model fit to data. How well do the predictions match the observations?**
+
+
+**Answer Q. 16**
+
+
+### Interpreting bias and RMSE
+
+Bias helps us understand whether, on average, the model predicts high (positive bias) or low (negative bias). RMSE also accounts for variability in the predictions. In other words, RMSE can indicate whether are predictions consistently just a little bit low, or whether they are 'all over the place' but on average a little bit low. RMSE will be higher (indicating a poorer model fit) if the variance in predictions is high. Bias does not account for the variance of the predictions.
+
+Run the following code chunk and examine the slide to learn more about how to interpret bias and RMSE.
+
+```{r, echo=FALSE, out.width = '80%'}
+knitr::include_graphics("./images/bias_vs_rmse.png")
+```
+
+Next, we will calculate bias. The units of bias are the same as the predicted variable (in our case, $\mu g L^{-1}$).
+
+```{r}
+bias <- mean(mod - model_data$chla, na.rm = TRUE) 
+bias
+```
+
+**Q.17 (Shiny) Use the calculated bias to assess the model fit to data. How good is the model fit? Explain your reasoning.**
+
+**Answer Q. 17**
+
+
+
+Finally, we will calculate RMSE. The units of RMSE are also the same as the predicted variable.
+
+```{r}
+rmse <- round(sqrt(mean((mod - model_data$chla)^2, na.rm = TRUE)), 2)
+rmse
+```
+
+**Q.18 (Shiny) Use the calculated RMSE to assess the model fit to data. How good is the model fit? Explain your reasoning.**
+
+**Answer Q. 18**
+
+
+
+We will also save the **residuals** of our model, which are the differences between model predictions and observations. We will need these values later on to account for **process uncertainty**, or uncertainty due to the structure of our model, in our forecasts.
+
+```{r}
+residuals <- mod - model_data$chla
+```
+
+
+## Objective 4. Generate a one-day-ahead forecast with uncertainty.
+
+Finally, we are ready to generate a forecast with our fitted model! 
+
+### A note on shifting from model fitting to forecasting
+
+So far, we have fit our chlorophyll-a model using yesterday's chlorophyll-a to predict today's chlorophyll-a. 
+ 
+Now, to forecast, we will need to make a subtle but important change in the way we write our model, to show that instead of predicting today's chlorophyll-a, we are now forecasting tomorrow's chlorophyll-a:
+
+$$Chla_{t+1} = \beta_0 + \beta_1 * (Chla_{t1} - \overline{Chla}) + \overline{Chla}$$
+Note the change in the subscripts of the Chla variables from t-1 to t and t to t+1!!
+
+To generate a forecast using our model, we use today's observation to make a prediction for tomorrow. But before we can do that, we need to calculate the uncertainty associated with our forecast.
+
+### What is ecological forecast uncertainty? 
+
+Forecast uncertainty is the range of possible alternate future conditions predicted by a model. We generate multiple different predictions of the future because the future is inherently unknown.  
+
+### Where does ecological forecast uncertainty come from?
+
+Uncertainty comes from natural variability in the environment, imperfect representation of an ecological system in a model, and error when measuring the system. When generating a forecast, uncertainty can come from the structure of the model used, the initial conditions of the model, the parameters of the model, and the data used to drive the model, among other sources.
+
+### Why is uncertainty important to quantify for an ecological forecast? 
+
+Knowing the uncertainty in a forecast allows forecast users to make informed decisions based on the range of forecasted outcomes and prepare accordingly.
+
+### What is an ensemble forecast?
+
+One way of accounting for uncertainty in forecasts is through an **ensemble forecast**. Ensemble forecasts are generated by running a model many times with different conditions. In our case, we will run our autoregressive model many times with slightly different conditions to account for uncertainty in the forecast. All the model runs together are referred to as the **ensemble**. Each individual model run is referred to as an **ensemble member**. Forecasters typically generate tens to hundreds of ensemble members to build uncertainty into their forecasts.
+
+Run the following code chunk and examine the slides to learn more about forecast uncertainty.
+
+```{r, echo=FALSE, out.width = '80%'}
+knitr::include_graphics("./images/fc_uc_slides/Slide1.png")
+knitr::include_graphics("./images/fc_uc_slides/Slide2.png")
+knitr::include_graphics("./images/fc_uc_slides/Slide3.png")
+knitr::include_graphics("./images/fc_uc_slides/Slide4.png")
+knitr::include_graphics("./images/fc_uc_slides/Slide5.png")
+knitr::include_graphics("./images/fc_uc_slides/Slide6.png")
+knitr::include_graphics("./images/fc_uc_slides/Slide7.png")
+knitr::include_graphics("./images/fc_uc_slides/Slide8.png")
+```
+
+**Q.19 (Shiny) Explain, in your own words, what forecast uncertainty is and why it is important to account for uncertainty in forecasts.**
+
+**Answer Q.19**
+
+
+
+### Sources of forecast uncertainty
+
+There are multiple sources of uncertainty in forecasts. Today, we will be accounting for two sources of forecast uncertainty: **initial conditions uncertainty** and **process uncertainty**.
+
+#### What are forecast **initial conditions**?
+
+**Initial conditions** are the starting conditions of your model when you generate a forecast. 
+
+#### What is **initial conditions uncertainty**?
+
+**Initial conditions uncertainty** refers to uncertainty arising because the current conditions in an ecosystem - in our case, lake chlorophyll-a - are not precisely known.
+
+Run the following code chunk and examine the slides to learn more about initial conditions uncertainty.
+
+```{r, echo=FALSE, out.width = '80%'}
+knitr::include_graphics("./images/ic_uc_slides/Slide1.png")
+knitr::include_graphics("./images/ic_uc_slides/Slide2.png")
+knitr::include_graphics("./images/ic_uc_slides/Slide3.png")
+knitr::include_graphics("./images/ic_uc_slides/Slide4.png")
+knitr::include_graphics("./images/ic_uc_slides/Slide5.png")
+knitr::include_graphics("./images/ic_uc_slides/Slide6.png")
+knitr::include_graphics("./images/ic_uc_slides/Slide7.png")
+knitr::include_graphics("./images/ic_uc_slides/Slide8.png")
+knitr::include_graphics("./images/ic_uc_slides/Slide9.png")
+```
+
+Even though we have measurements of chlorophyll-a from our lake, we know that chlorophyll-a varies throughout the day so this measurement might not capture exactly the chlorophyll-a in our lake at this time. Additionally, there may be observation error in our chlorophyll-a measurements.
+
+To account for initial conditions uncertainty we can generate a distribution around the initial condition of chlorophyll-a and then run our model with slightly different initial conditions.
+
+
+**Q.20 (Shiny) What data from Lake Barco are needed to provide the initial condition for your forecast model?** 
+
+**Answer Q.20**
+
+
+
+So far, we have been working with daily mean chlorophyll-a values from your chosen lake site to fit our model.
+
+Now, we will use some high-frequency (5-minute) chlorophyll-a data collected in a controlled laboratory environment to estimate initial conditions uncertainty. Because these data are collected in a container with a known chlorophyll-a concentration, variability in the data can be used to represent observation uncertainty. Click the button below to visualize the high-frequency data.
+
+```{r}
+high_frequency_data <- read_csv("./data/chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) 
+```
+
+We can look at variability in this 5-minute data over the course of a day to get a visual understanding of the daily variability in chlorophyll-a. Each colored line in the plot below represents a different day of chl-a data from midnight to midnight.
+
+```{r}
+ggplot(data = high_frequency_data)+
+  geom_line(aes(x = time, y = chla, group = day, color = as.factor(day)))+
+  theme_bw()+
+  labs(color = "Day of experiment")+
+  xlab("Hour of day")+
+  ylab("Chlorophyll-a (ug/L)")
+```
+
+**Q.21 (Shiny) Examine the plot of high-frequency chlorophyll-a data. How variable is chlorophyll-a over the course of a day?** 
+
+**Answer Q.21**
+
+
+Next, we will calculate the mean daily standard deviation of chl-a measurements (`ic_sd`), which we will use to estimate uncertainty in our initial conditions. 
+
+```{r}
+ic_sd_dataframe <- high_frequency_data %>%
+  group_by(day) %>%
+  summarize(daily_sd_chla = sd(chla, na.rm = TRUE))
+  
+ic_sd <- mean(ic_sd_dataframe$daily_sd_chla, na.rm = TRUE)
+ic_sd
+```
+
+Now, we can generate a distribution of initial conditions for our forecast using the current chlorophyll-a (`curr_chla`) and a standard deviation in units of ug/L calculated from high-frequency data from Lake Barco (`ic_sd`).
+
+To do this, we will use the `rnorm()` function, which takes `n` draws from a normal distribution with a `mean` and `sd` specified as arguments to the function.
+
+First we will set the number of ensemble members we would like to have in our ensemble forecast.
+```{r}
+n_members = 500
+```
+
+Now we generate the distribution.
+
+```{r}
+curr_chla <- lake_data %>%
+  filter(datetime == forecast_start_date) %>%
+  pull(chla)
+
+ic_distribution <- rnorm(n = n_members, mean = curr_chla, sd = ic_sd)
+```
+
+Plot the distribution around your initial condition. This represents the **initial conditions uncertainty** of your forecast.
+```{r}
+plot_ic_dist(curr_chla, ic_distribution)
+```
+
+#### What is **process uncertainty** in an ecological forecast?
+
+Process uncertainty is uncertainty caused by our inability to model all processes as observed in the real world.
+
+Run the following code chunk and examine the slides to learn more about process uncertainty.
+
+```{r, echo=FALSE, out.width = '80%'}
+knitr::include_graphics("./images/proc_uc_slides/Slide01.png")
+knitr::include_graphics("./images/proc_uc_slides/Slide02.png")
+knitr::include_graphics("./images/proc_uc_slides/Slide03.png")
+knitr::include_graphics("./images/proc_uc_slides/Slide04.png")
+knitr::include_graphics("./images/proc_uc_slides/Slide05.png")
+knitr::include_graphics("./images/proc_uc_slides/Slide06.png")
+knitr::include_graphics("./images/proc_uc_slides/Slide07.png")
+knitr::include_graphics("./images/proc_uc_slides/Slide08.png")
+knitr::include_graphics("./images/proc_uc_slides/Slide09.png")
+knitr::include_graphics("./images/proc_uc_slides/Slide10.png")
+```
+
+Our 'simple' chlorophyll-a model uses today's chlorophyll-a to forecast tomorrow's chlorophyll-a. For example:
+
+$$Chla_{t+1} = \beta_0 + \beta_1 * (Chla_{t1} - \overline{Chla}) + \overline{Chla}$$ 
+But we know that chlorophyll-a can be affected by other processes as well (such as water temperature and the amount of available light and nutrients) and that our model has simplified or ignored these. To account for the uncertainty these simplifications introduce, we can add in process noise (W) at each time step. In this model, chlorophyll-a tomorrow is a function of today's chlorophyll-a plus some noise (W):
+
+$$Chla_{t+1} = \beta_0 + \beta_1 * (Chla_{t1} - \overline{Chla}) + \overline{Chla} + W$$
+where process noise is equal to a random number drawn from a normal distribution with a mean of zero and a standard deviation ($\sigma$).
+
+$$W \sim {\mathrm Norm}(0, \sigma)$$
+
+To account for process uncertainty, we can run the model multiple times with random noise added to each model run. More noise is associated with higher process uncertainty, and vice versa. But how much random noise should we add?
+
+To calculate process uncertainty, we will define the standard deviation of the process uncertainty distribution, `sigma` as the standard deviation of the residuals. This is the uncertainty left over after we found the best parameters for fitting the model.
+
+```{r}
+sigma <- sd(residuals, na.rm = TRUE) # Process Uncertainty Noise Std Dev.; this is your sigma
+```
+
+Use `rnorm()` your process uncertainty distribution, using 0 as the mean and `sigma` as the standard deviation.
+
+```{r}
+process_distribution <- rnorm(n = n_members, mean = 0, sd = sigma)
+```
+
+Plot the process uncertainty distribution. We will use this distribution to account for uncertainty in our forecast.
+
+```{r}
+plot_process_dist(process_distribution)
+```
+
+Finally, we are ready to use our autoregressive model to generate a one-day-ahead forecast with uncertainty. Notice that we are using our initial condition and process uncertainty distributions to run our model many times with slightly different random noise (W) and initial conditions values. This allows us to account for uncertainty in our forecast.
+
+Run the code chunk below and view the slide describing how the forecast is generated.
+
+```{r, echo=FALSE, out.width = '80%'}
+knitr::include_graphics("./images/fc_w_uncert.png")
+```
+
+Generate the forecast!
+
+```{r}
+forecast_chla = intercept + ar1 * (ic_distribution - chla_mean) + chla_mean + process_distribution
+```
+
+Let's take a look at our forecast for tomorrow with uncertainty.
+
+```{r}
+plot_fc_dist(forecast_chla)
+```
+
+To prepare you for our next activity, let's visualize this forecast in a different way, using a customized plotting function. We will use plots very similar to this one to help explain the process of data assimilation later on.
+
+First we will define some arguments for the function:
+1. `start_date` date forecast is generated
+2. `forecast_date` date being forecasted
+
+```{r}
+start_date <- "2020-09-25" 
+forecast_date <- "2020-09-26"
+```
+
+Plot the forecast.
+
+```{r}
+plot_fc_1day(curr_chla, start_date, forecast_date, ic_distribution, forecast_chla, n_members)
+```
+
+**Q.22 (Shiny) What is the forecasted chlorophyll-a concentration for 2020-09-26?** 
+
+*Hint: Remember, because forecasts are uncertain, there is not one single correct value for forecasted chlorophyll-a.*
+
+**Answer Q.22**
+
+
+
+**Q.23 (Shiny) What is the relationship between the observed chlorophyll-a for 2020-09-25, and the initial condition distribution (shown in blue)?**
+
+**Answer Q.23**
+
+
+
+**Q.24 (Shiny) Each one of the gray lines in the figure above represents an ensemble member. Describe the sources of uncertainty in the ensemble forecast for 2020-09-26 in your own words.**
+
+**Answer Q.24**
+
+
+To learn more about forecast uncertainty, you can explore Macrosystems EDDIE Module 6: Understanding Uncertainty in Ecological Forecasts, which is available both as an [R Shiny app](https://macrosystemseddie.shinyapps.io/module6/) and as an [RMarkdown](https://github.com/MacrosystemsEDDIE/module6_R).
+
+
+## Activity B
+
+## Objective 5. Compare one-day-ahead forecasts generated with and without data assimilation.
+
+Now that we have generated a forecast with uncertainty, we are going to explore the effect of data assimilation on our forecast. Remember, **data assimilation** is the process of using observed data to update our forecast model as the data become available.
+
+Let's pretend that a day has passed since we made our first forecast, and we now have a new observation that we can use to update our forecast.
+
+```{r}
+new_obs <- lake_data %>%
+  filter(datetime == forecast_date) %>%
+  pull(chla)
+```
+
+We will use this observation to update our forecast **initial condition**. We will do this using a statistical technique called an **ensemble Kalman filter**. 
+
+#### What is an ensemble Kalman filter?
+
+An **ensemble Kalman filter** is a statistical technique that updates model predictions to more closely match the most recently observed data, while accounting for uncertainty in both model predictions and observations. While there are many techniques that can be used to assimilate data in ecological forecasts, the benefits of an ensemble Kalman filter are:
+
+1. It is designed to be used with model ensembles, and so is an ideal method for forecasts which include uncertainty.
+
+2. It accounts for uncertainty in both model predictions and observations, rather than assuming that observations are "true" and have no uncertainty. As a result, when a model is updated with an ensemble Kalman filter, the updated state of the model will not always perfectly match the new observations, because the ensemble Kalman filter integrates information from both the model predictions and the observations. 
+
+3. It can be used to update multiple variables and parameters within a model, even if not all of the variables and parameters are observed. For example, suppose you have a model that predicts both water temperature and air temperature, but you only have observations of water temperature. An ensemble Kalman filter can use the relationship between water and air temperature in the model to update both variables as well as relevant model parameters using just the water temperature observations.
+
+Run the code chunk below and view the slide describing the ensemble Kalman filter.
+
+```{r, echo=FALSE, out.width = '80%'}
+knitr::include_graphics("./images/enkf.png")
+```
+
+For today, we will use a simplified version of the ensemble Kalman filter that just updates the initial condition of chlorophyll-a using new observations when they become available. We have built a custom function called `EnKF()` that runs the simplified ensemble Kalman filter. If you would like to learn more about how the ensemble Kalman filter works, the source code for the `EnKF()` function can be found in the `EnKF_and_plot_functions.R` file in the *assignment/R* folder.
+
+**Q.25 (Shiny) Briefly describe in your own words how an ensemble Kalman filter can be used to assimilate data into an ecological forecast.**
+
+**Answer Q.25**
+
+
+To run the custom `EnKF()` function, we need to supply three arguments:
+
+1. `forecast_chla` a forecast of chlorophyll-a, in the form of a distribution that accounts for uncertainty in model predictions
+2. `new_obs` a new observation we will use to update the forecast
+3. `ic_sd` the standard deviation of our initial conditions distribution, so the ensemble Kalman filter can account for uncertainty of the new observation
+
+Update the forecast initial condition using the new observation.
+
+```{r}
+ic_update <- EnKF(forecast = forecast_chla, new_observation = new_obs, ic_sd = ic_sd)
+```
+
+Let's plot the updated initial condition! We will also plot the initial forecast again for comparison.
+
+```{r}
+chla_obs <- c(curr_chla, new_obs) #vector of observations to use for plotting
+plot_fc_1day(curr_chla, start_date, forecast_date, ic_distribution, forecast_chla, n_members)
+plot_fc_update(chla_obs, start_date, forecast_date, ic_distribution, ic_update, forecast_chla, n_members)
+```
+
+**Q.26 (Shiny) Compare the difference between the forecast distribution (white) for 2020-09-26 and the updated initial condition (blue distribution) for 2020-09-26. How are these two distributions different?**
+
+**Answer Q.26**
+
+
+Now we will make a second forecast for the next day using our updated initial conditions.
+
+```{r}
+second_forecast_date <- "2020-09-27"
+second_forecast = intercept + ar1 * (ic_update - chla_mean) + chla_mean + process_distribution
+```
+
+Finally, we will plot both of our forecasts together with the initial conditions for each forecast. 
+
+```{r}
+forecast_dates = c(forecast_date, second_forecast_date) #vector of forecast dates
+plot_second_forecast(chla_obs, start_date, forecast_dates, ic_distribution, ic_update, forecast_chla, second_forecast, n_members)
+```
+
+We have explored how the ensemble Kalman filter can update the forecast initial condition using a new observation. But what if there is no observation to use for updating? What will be the outcome of the applying the ensemble Kalman filter in this situation?
+
+First we set the new observation to NA.
+
+```{r}
+missing_obs <- NA
+```
+
+Now we will run the ensemble Kalman filter with an NA instead of an observation.
+
+```{r}
+ic_update_no_obs <- EnKF(forecast = forecast_chla, new_observation = missing_obs, ic_sd = ic_sd)
+```
+
+Let's plot the outcome. We will also plot the initial forecast again for comparison.
+
+```{r}
+chla_obs_missing <- c(curr_chla, missing_obs) #vector of observations to use for plotting
+plot_fc_1day(curr_chla, start_date, forecast_date, ic_distribution, forecast_chla, n_members)
+plot_fc_update(chla_obs_missing, start_date, forecast_date, ic_distribution, ic_update_no_obs, forecast_chla, n_members)
+```
+
+**Q.27 (Shiny) Compare the forecast distribution (white) for 2020-09-26 and the updated initial condition (blue distribution) for 2020-09-26. What happened when there was no new observation to update the forecast?**
+
+**Answer Q.27**
+
+
+Now we will make a second forecast. You have seen that when an observation is missing, the initial condition cannot be updated. Let's see how this affects the second forecast.
+
+```{r}
+second_forecast_no_obs = intercept + ar1 * (ic_update_no_obs - chla_mean) + chla_mean + process_distribution
+```
+
+Finally, we will plot both of our forecasts together with the initial conditions for each forecast.
+
+```{r}
+plot_second_forecast(chla_obs_missing, start_date, forecast_dates, ic_distribution, ic_update_no_obs, forecast_chla, second_forecast_no_obs, n_members)
+```
+
+**Q.28 (Shiny) Compare the two-forecast plot with no data assimilation (missing observation) to the two-forecast plot with data assimilation. Specifically, how do the forecasts for 2020-09-27 on each plot compare?**
+
+*Hint: Be sure to check the y axes when you are comparing the figures, as they are not identical.*
+
+**Answer Q.28**
+
+
+## Objective 6. Compare one-day-ahead forecasts generated with data assimilation, using data with low vs. high observation uncertainty.
+
+### What is observation uncertainty?
+**Observation uncertainty** is the error associated with measurement of a variable. Importantly, observation uncertainty is different from initial conditions uncertainty, which is uncertainty regarding the starting conditions of a model. Greater observation uncertainty (i.e., lower confidence in the accuracy of observations) can lead to greater initial conditions uncertainty.
+
+### What is a sensor?
+A **sensor** is a device that responds to a stimulus (such as heat, light, sound, pressure, magnetism, or motion) and transmits an electric impulse which is converted into a meaningful measurement for users.
+
+### How much observation uncertainty is associated with chlorophyll-a measurements in lakes?
+Different methods of collecting data have varying levels of observation uncertainty. Read the text and scroll through the slides below to learn about observation uncertainty in chl-a measurements.
+
+```{r, echo=FALSE, out.width = '80%'}
+knitr::include_graphics("./images/chla_obs_uc/Slide1.png")
+knitr::include_graphics("./images/chla_obs_uc/Slide2.png")
+```
+
+### In-Lake Sensor
+
+#### How it works:
+
+Chlorophyll-a (chl-a) sensors send a beam of light into the water column and measure how much light is fluoresced back to the sensor by chlorophyll-a in phytoplankton cells. Fluorescence intensity is then converted to an estimate of chlorophyll-a concentration. Chlorophyll-a sensors can be deployed at a fixed depth in a lake or lowered through the water column on a cable.
+
+#### Observation uncertainty:
+
+Sensor accuracy may be affected by the presence of substances that alter water color, such as suspended sediment or dissolved organic matter. In addition, there is uncertainty associated with the equation that converts fluorescence to chlorophyll-a concentration.
+
+### Lab Analysis of Water Sample
+
+#### How it works:
+
+Water samples are collected, processed, and inserted into a spectrophotometer that uses the sample's light absorption at a wavelength of 665 nm to estimate the chlorophyll-a concentration.
+
+#### Observation uncertainty:
+
+Water samples must be processed (transported back to the lab, filtered, and extracted using ethanol) before they are inserted into the spectrophotometer. Errors in processing may increase uncertainty in observations. In addition, there is uncertainty associated with the equation used to estimate chl-a concentration based on absorption.
+
+We have explored the effect of data assimilation vs. no data assimilation on forecasts using an ensemble Kalman filter, which accounts for uncertainty in both model predictions and observations. 
+
+Now, imagine that we have purchased a new water quality sensor, which takes incredibly accurate chlorophyll-a measurements, thus decreasing our observation uncertainty. How might this decrease in observation uncertainty affect our forecasts?
+
+**Q.29 (Shiny) Make a prediction. How do you think a decrease in observation uncertainty will affect the forecasts?**
+
+**Answer Q.29**
+
+
+First, let's plot an initial conditions distribution that reflects the lower uncertainty due to our new water quality sensor.
+
+```{r}
+ic_sd_low = 0.1
+ic_distribution_low <- rnorm(n = n_members, mean = curr_chla, sd = ic_sd_low)
+plot_ic_dist(curr_chla, ic_distribution_low)
+```
+
+Now, we will replicate the two-forecast plot with data assimilation that we created above, but this time with lower observation uncertainty.
+
+Generate the first forecast (for 2020-09-26).
+
+```{r}
+first_forecast_low_obs_uc = intercept + ar1 * (ic_distribution_low - chla_mean) + chla_mean + process_distribution
+```
+
+Update the initial condition using the ensemble Kalman filter. *Note* we are specifying the `ic_sd` argument to the `EnKF()` function as the new, lower initial condition standard deviation (`ic_sd_low`) due to the lower observation uncertainty from our new water quality sensor.
+
+```{r}
+ic_update_low_obs_uc <- EnKF(forecast = first_forecast_low_obs_uc, new_observation = new_obs, ic_sd = ic_sd_low)
+```
+
+Generate a second forecast (for 2020-09-27) using the updated initial condition with lower observation uncertainty.
+
+```{r}
+second_forecast_low_obs_uc = intercept + ar1 * (ic_update_low_obs_uc - chla_mean) + chla_mean + process_distribution
+```
+
+Finally, we will plot both of our forecasts together with the initial conditions for each forecast. We will also plot the previous forecasts you made with data assimilation for comparison.
+
+Figure A: "Original" forecast with `ic_sd` of ~0.3 ug/L.
+
+```{r}
+figure_a <- plot_second_forecast(chla_obs, start_date, forecast_dates, ic_distribution, ic_update, forecast_chla, second_forecast, n_members)
+figure_a
+```
+
+Now we will extract the y axis limits from Figure A to facilitate comparison with the next figure.
+
+```{r}
+ylim_figure_a = range(c(layer_scales(figure_a)$y$range$range))
+```
+
+
+Figure B: Forecast with `ic_sd_low` of 0.1 ug/L due to the new water quality sensor.
+
+Note that we plot this figure to have the same y axis limits as Figure A to facilitate comparison
+
+```{r}
+figure_b <- plot_second_forecast(chla_obs, start_date, forecast_dates, ic_distribution_low, ic_update_low_obs_uc, first_forecast_low_obs_uc, second_forecast_low_obs_uc, n_members) + ylim(ylim_figure_a)
+figure_b
+```
+
+**Q.30 (Shiny) What is the effect of a decrease in observation uncertainty on the forecasts? Does this match what you predicted in Q.29?** 
+
+**Answer Q.30**
+
+
+
+Now, imagine that our water quality sensor has malfunctioned (oh no!) leading to higher-than-normal observation uncertainty in our chlorophyll-a observations. 
+
+**Q.31 (Shiny) Make a prediction. Using your experience from the previous example, how do you think an increase in observation uncertainty will affect the forecasts?**
+
+**Answer Q.31**
+
+
+
+Let's plot an initial conditions distribution with high uncertainty.
+```{r}
+ic_sd_high = 0.5
+ic_distribution_high <- rnorm(n = n_members, mean = curr_chla, sd = ic_sd_high)
+plot_ic_dist(curr_chla, ic_distribution_high)
+```
+
+We will once again replicate the two-forecast plot with data assimilation that we created above, but this time with higher observation uncertainty.
+
+Generate the first forecast (for 2020-09-26).
+
+```{r}
+first_forecast_high_obs_uc = intercept + ar1 * (ic_distribution_high - chla_mean) + chla_mean + process_distribution
+```
+
+Update the initial condition using the ensemble Kalman filter. *Note* we are specifying the `ic_sd` argument to the `EnKF()` function as the new, higher initial condition standard deviation (`ic_sd_high`) due to the higher observation uncertainty from our malfunctioning water quality sensor.
+
+```{r}
+ic_update_high_obs_uc <- EnKF(forecast = first_forecast_high_obs_uc, new_observation = new_obs, ic_sd = ic_sd_high)
+```
+
+Generate a second forecast (for 2020-09-27) using the updated initial condition with higher observation uncertainty.
+
+```{r}
+second_forecast_high_obs_uc = intercept + ar1 * (ic_update_high_obs_uc - chla_mean) + chla_mean + process_distribution
+```
+
+Finally, we will plot both of our forecasts together with the initial conditions for each forecast. We will also plot the previous forecasts you made with data assimilation for comparison.
+
+Figure A: "Original" forecast with `ic_sd` of ~0.3 ug/L.
+```{r}
+figure_a
+```
+
+Figure C: Forecast with `ic_sd_high` of 0.5 ug/L due to a malfunctioning water quality sensor.
+```{r}
+figure_c <- plot_second_forecast(chla_obs, start_date, forecast_dates, ic_distribution_high, ic_update_high_obs_uc, first_forecast_high_obs_uc, second_forecast_high_obs_uc, n_members)+ ylim(ylim_figure_a)
+figure_c
+```
+
+**Q.32 (Shiny) What is the effect of an increase in observation uncertainty on the forecasts? Does this match what you predicted in Q.31?** 
+
+**Answer Q.32**
+
+
+
+
+## Objective 7. Compare a series of one-day-ahead forecasts with no data assimilation, weekly data assimilation, and daily data assimilation. 
+
+### How often can we assimilate chlorophyll-a data into forecasts?
+The availability of data for assimilation into forecasts depends on both data frequency and data latency.
+
+- **Data frequency** is the amount of time that passes between measurements.
+- **Data latency** is the time between when a measurement is made and when it is available for assimilation into forecasts.
+
+Different methods of collecting data have varying levels of data frequency and latency. Read the text and scroll through the slides below to learn about data frequency and latency of chl-a measurements.
+
+```{r, echo=FALSE, out.width = '80%'}
+knitr::include_graphics("./images/chla_frequency/Slide1.png")
+knitr::include_graphics("./images/chla_frequency/Slide2.png")
+```
+
+### In-Lake Sensor
+
+#### Frequency:
+
+If deployed in a lake, chlorophyll-a sensor data can be collected at a *high data frequency* (e.g., every minute or even more often). Otherwise, data are collected how ever frequently a human travels to the lake to collect data.
+
+#### Latency:
+
+Chlorophyll-a sensor data may be streamed wirelessly from the lake to a computer, resulting in *low data latency*. Otherwise, a human must travel to the lake, download the sensor data, and upload it to a computer, increasing latency.
+
+### Lab Analysis of Water Sample
+
+#### Frequency:
+
+Typically, water samples are not collected every day as it requires a human to travel to the lake and take measurements. As a result, *the frequency of these data can be highly variable*, ranging from multiple times a week to once a year.
+
+#### Latency:
+
+It usually takes at least a week to conduct laboratory analyses of water samples for chlorophyll-a, and the process can be much longer (e.g., several weeks or months) depending on the resources available to the researcher, resulting in *high data latency*.
+
+In the previous two objectives, we have been developing an intuition of how data assimilation works for an ecological forecast, and how observation uncertainty affects data assimilation and forecast output. Now, we will explore the effect of data assimilation on forecast accuracy - does collecting lots of data and assimilating it into our predictions really improve our forecasts?
+
+**Q.33 (Shiny) Make a prediction by filling in the blank: as the frequency of data assimilation increases, forecast accuracy ____________. Choose from 'increases', 'decreases', or 'stays the same.'** 
+
+**Answer Q.33**
+
+To answer this question, we will generate multiple series of one-day-ahead forecasts over a period of 10 days. For each series of forecasts, we will assimilate data at different time intervals (one series with no data assimilation, one series with weekly data assimilation, and one series with daily data assimilation) and compare the accuracy of the resulting forecasts.
+
+To do this in code, we will use a **for-loop**.
+
+#### What is a for-loop?
+
+A **for-loop** runs a section of code repeatedly. The number of times the for-loop runs is specified by the coder, either by specifying the number of times the code should be run before the for-loop stops. For example, below we write a for-loop that prints "Hello World!" eight times.
+```{r}
+for(i in 1:8){
+  print("Hello World!")
+}
+```
+**Notice:**      
+1. We specify the number of times the for-loop should run with the code `for(i in 1:8)`. We will explain what the `i` refers to when we discuss indexing below.  
+2. The code that is repeatedly run is contained in brackets `{}`.
+
+#### What is indexing in a for-loop?
+
+Within a for-loop, **indexing** allows you to refer to a particular iteration, or individual code run, of the loop. This can be useful if you want to, for example, perform a particular calculation on every row of a data frame. In R, `i` is commonly used for indexing in for-loops. Below we write a for-loop that prints the numbers 1 to 8 using indexing.
+```{r}
+for(i in 1:8){
+  print(i)
+}
+```
+#### How is indexing in a for-loop useful for ecological forecasting?
+  
+Often, we want to run a forecast model repeatedly to make predictions for multiple days into the future. For-loops can be a useful way to accomplish this, *particularly* if each day's prediction depends on the previous day.  
+  
+Let's pretend we have a very simple forecast model, where tomorrow's chlorophyll-a is equal to today's chlorophyll-a + 1 microgram per liter. If we wanted to generate a 7-day prediction of chlorophyll-a using this model, we could write a for-loop to do so.  
+  
+First, we set our initial observed chlorophyll-a.
+
+```{r}
+starting_chla <- 11.4 #micrograms per liter
+```
+
+Then, we create an empty vector in which we will store our starting chlorophyll-a as well as our predicted chlorophyll-a for the next seven days (so the total length of the vector = 8 days).
+
+```{r}
+chla <- rep(NA, 8)
+```
+
+Next, we set the first element of our empty vector to be the starting chlorophyll-a.
+
+```{r}
+chla[1] <- starting_chla
+chla
+```
+
+Finally, we run a for-loop to generate 7 days of chlorophyll-a predictions, which will be stored in the `chla` vector. **Note** that the for-loop starts at the 2nd iteration (`for(i in 2:8)`) because we already know today's chlorophyll-a, so we are starting with tomorrow's prediction.
+
+```{r}
+for(i in 2:8){
+  chla[i] = chla[i-1] + 1 #micrograms per liter
+  print(chla[i])
+}
+```
+  
+**Q.34 (Rmd) Can you alter the code below to generate a *10-day* prediction of chlorophyll-a rather than a 7-day prediction? What is the predicted chlorophyll-a on the 10th day?**  
+  
+**Answer Q.34** Edit the code block to provide your answer.
+```{r}
+starting_chla <- 11.4 #degrees C
+
+chla <- rep(NA, 8)
+
+chla[1] <- starting_chla
+chla
+
+for(i in 2:8){
+  chla[i] = chla[i-1] + 1 #micrograms per liter
+  print(chla[i])
+}
+```
+  
+Of course, this is probably not a very good model for predicting chlorophyll-a, because it would lead to chlorophyll-a increasing infinitely into the future! Next, we will use the concept of a for-loop to make multiple, 1-day-ahead forecasts of chlorophyll-a using the autoregressive model you fit above.
+
+First, we will specify how many 1-day-ahead forecasts we would like to make.
+```{r}
+days_to_forecast = 10
+```
+
+Then we will create a date vector of our forecast start dates, based on how many days we would like to forecast.
+```{r}
+forecast_dates <- seq.Date(from = as.Date(forecast_start_date), to = as.Date(forecast_start_date) + days_to_forecast, by = 'days')
+```
+
+Next, we need to specify how often we want the forecast model to assimilate data. For this first series of forecasts, we want to see what happens when no data are assimilated during the forecast period (which is 10 days). So, we will set the `chla_assimilation_frequency` to 11 days, ensuring that no data will be assimilated during the 10-day forecast period.
+```{r}
+chla_assimilation_frequency_no_da = 11
+```
+
+Before we run the forecast, we need to format our lake data to play nicely with our forecasting function. First, we will create a vector (`chla_assimilation_dates_no_da`) that we will use as an index to be sure that we only provide the model with the chlorophyll-a data that we want to assimilate. In this case, only the observation on the first day of the forecast period will be provided as the initial condition for the forecast. 
+```{r}
+chla_assimilation_dates_no_da <- forecast_dates[seq(1, length(forecast_dates), chla_assimilation_frequency_no_da)]
+```
+
+Then, we will manipulate our lake data to create a `forecast_data` dataframe, which contains the data that will be provided to the model for forecasting.
+```{r}
+forecast_data_no_da <- lake_data %>%
+  select(datetime, chla) %>%
+  mutate(datetime = as.Date(datetime)) %>%
+  filter(datetime %in% forecast_dates) %>%
+  mutate(chla = ifelse(datetime %in% chla_assimilation_dates_no_da,chla,NA)) 
+```
+
+Next, we will create a data frame (`forecast_series_no_da`) to hold the initial conditions and forecasts for each day in our forecast period. This data frame has four columns:
+1. `date` the dates for which we are generating initial conditions and/or forecasts
+2. `chla` values of chlorophyll-a for our initial conditions and forecasts
+3. `ensemble_member` numeric identifiers for each member of our ensemble forecast
+4. `data_type` a categorical variable that can take the value "fc" to indicate that this chlorophyll-a value is part of a forecast or "ic" to indicate that this chlorophyll-a value is part of an initial conditions distribution
+```{r}
+forecast_series_no_da <- tibble(date = rep(forecast_dates, each = n_members*2),
+              chla = NA_real_,
+              ensemble_member = rep(1:n_members, times = length(forecast_dates)*2),
+              data_type = rep(c("fc","ic"), each = n_members, times = length(forecast_dates)))
+```
+
+Finally, we will populate our `forecast_series_no_da` data frame with the initial conditions distribution for the very first day of the forecast period. First, we will assign the first initial conditions distribution for this series of forecasts to be the original initial conditions distribution that we created using high-frequency data from Lake Barco. 
+```{r}
+ic_distribution_no_da <- ic_distribution #assign the first initial conditions distribution
+```
+
+Next, we will create a temporary data frame for the initial conditions distribution that matches the format of `forecast_series_no_da`.
+```{r}
+temp_ic <- tibble(date = rep(forecast_dates[1], each = n_members),
+              chla = ic_distribution_no_da,
+              ensemble_member = c(1:n_members),
+              data_type = rep("ic", times = n_members))
+```
+
+Then, we update the relevant rows of the `forecast_series_no_da` data frame with the values of `ic_distribution_no_da` using the `rows_update()` function. The `rows_update()` function allows you to update the values of particular rows in one data frame using values from a second data frame, while supplying identifier columns (e.g., `date`) to be sure you are updating the correct values. This function will also be used the forecasting for-loop we will build below. 
+```{r}
+forecast_series_no_da <- forecast_series_no_da %>%
+  rows_update(temp_ic, by = c("date","ensemble_member","data_type"))
+```
+
+Finally, we run our series of forecasts! Here, we loop through days in our forecast period and generate 1-day-ahead predictions with our autoregressive model. Note we use the `rows_update()` function to replace NAs with forecasted chlorophyll-a and updated initial condition values each day.
+```{r}
+for(i in 2:length(forecast_dates)){
+  
+  #Generate forecast
+  forecast_chla_no_da = intercept + ar1 * (ic_distribution_no_da - chla_mean) + chla_mean + process_distribution
+
+  #Select current row of forecast_data to see if there is data to use for updating
+  new_obs_no_da <- forecast_data_no_da$chla[i] #Observed chl-a
+
+  #Update the initial condition
+  ic_update_no_da <- EnKF(forecast = forecast_chla_no_da, new_observation = new_obs_no_da, ic_sd = ic_sd)
+  
+  #Assign the updated initial condition to be used for the next day's forecast
+  ic_distribution_no_da <- ic_update_no_da
+
+  #Build temporary data frame to hold current initial condition and forecast
+  temp <- tibble(date = rep(forecast_dates[i], times = n_members*2),
+               chla = c(forecast_chla_no_da, ic_update_no_da),
+               ensemble_member = rep(1:n_members, times = 2),
+               data_type = rep(c("fc","ic"), each = n_members))
+
+  #Update rows of forecast series output data frame
+  forecast_series_no_da <- forecast_series_no_da %>%
+    rows_update(temp, by = c("date","ensemble_member","data_type"))
+}
+```
+
+Let's plot our series of 1-day-ahead forecasts with no data assimilation.
+```{r}
+plot_many_forecasts(forecast_data = forecast_data_no_da, forecast_series = forecast_series_no_da)
+```
+
+**Q.35 (Shiny) Describe how the central tendency (most likely outcome predicted for each day) of the 1-day-ahead forecasts changes over time when no data are assimilated.** 
+
+**Answer Q.35**
+
+
+
+**Q.36 (Shiny) Describe how the uncertainty distribution of the 1-day-ahead forecasts changes over time when no data are assimilated.**
+
+**Answer Q.36**
+
+
+
+Now, we will assess the performance of the series of forecasts with no data assimilation.
+
+To compare our forecasts to observations, we will first calculate the mean prediction for each day.
+```{r}
+forecast_means_no_da <- forecast_series_no_da %>%
+  filter(data_type == "fc") %>%
+  group_by(date) %>%
+  summarize(forecast_mean = mean(chla, na.rm = TRUE))
+```
+
+We will also create a data frame of chlorophyll-a observations from Lake Barco that are available for our forecast period.
+```{r}
+chla_observations <- lake_data %>%
+  filter(datetime %in% forecast_dates)
+```
+
+Then, we will plot the forecasts again, this time with the observations that occurred during the forecast period.
+```{r}
+plot_many_forecasts_with_obs(forecast_data = forecast_data_no_da, forecast_series = forecast_series_no_da, observations = chla_observations)
+```
+
+**Q.37 (Shiny) Using the plot above, visually assess the forecasts and describe their accuracy. How well do they match observations?** 
+
+**Answer Q.37**
+
+
+
+Next, we will calculate the bias and RMSE of our forecasts. Remember, a smaller bias or RMSE indicates a more accurate forecast.
+```{r}
+bias_no_da <- mean(forecast_means_no_da$forecast_mean - chla_observations$chla, na.rm = TRUE) 
+bias_no_da
+
+rmse_no_da <- round(sqrt(mean((forecast_means_no_da$forecast_mean - chla_observations$chla)^2, na.rm = TRUE)), 2)
+rmse_no_da
+```
+
+**Q.38 (Shiny) Use the values of bias and RMSE to assess the forecasts with no data assimilation. How well do you think the forecasts are performing?**
+
+**Answer Q.38**
+
+
+
+Now, we will compare our series of 1-day-ahead forecasts with no data assimilation to forecasts made with weekly data assimilation.
+
+Let's run the forecasts with weekly data assimilation.
+
+We will change our assimilation frequency to weekly. 
+```{r}
+chla_assimilation_frequency_weekly = 7
+```
+
+We will update our vector of chlorophyll-a data assimilation dates.
+```{r}
+chla_assimilation_dates_weekly <- forecast_dates[seq(1, length(forecast_dates), chla_assimilation_frequency_weekly)]
+```
+
+Then, we will manipulate our lake data to create a `forecast_data` dataframe, which is the data that will be provided to the model for forecasting.
+```{r}
+forecast_data_weekly <- lake_data %>%
+  select(datetime, chla) %>%
+  mutate(datetime = as.Date(datetime)) %>%
+  filter(datetime %in% forecast_dates) %>%
+  mutate(chla = ifelse(datetime %in% chla_assimilation_dates_weekly,chla,NA)) 
+```
+
+Next, we will create a data frame (`forecast_series_weekly`) to hold the initial conditions and forecasts for each day in our forecast period. 
+```{r}
+forecast_series_weekly <- tibble(date = rep(forecast_dates, each = n_members*2),
+              chla = NA_real_,
+              ensemble_member = rep(1:n_members, times = length(forecast_dates)*2),
+              data_type = rep(c("fc","ic"), each = n_members, times = length(forecast_dates)))
+```
+
+Finally, we will populate our `forecast_series_weekly` data frame with the initial conditions distribution for the very first day of the forecast period. 
+```{r}
+ic_distribution_weekly <- ic_distribution #assign the first initial conditions distribution
+
+temp_ic <- tibble(date = rep(forecast_dates[1], each = n_members),
+              chla = ic_distribution_weekly,
+              ensemble_member = c(1:n_members),
+              data_type = rep("ic", times = n_members))
+
+forecast_series_weekly <- forecast_series_weekly %>%
+  rows_update(temp_ic, by = c("date","ensemble_member","data_type"))
+```
+
+Finally, we run our series of forecasts! Here, we loop through days in our forecast period and generate 1-day-ahead predictions with our autoregressive model. 
+```{r}
+for(i in 2:length(forecast_dates)){
+  
+  #Generate forecast
+  forecast_chla_weekly = intercept + ar1 * (ic_distribution_weekly - chla_mean) + chla_mean + process_distribution
+
+  #Select current row of forecast_data to see if there is data to use for updating
+  new_obs_weekly <- forecast_data_weekly$chla[i] #Observed chl-a
+
+  #Update the initial condition
+  ic_update_weekly <- EnKF(forecast = forecast_chla_weekly, new_observation = new_obs_weekly, ic_sd = ic_sd)
+  
+  #Assign the updated initial condition to be used for the next day's forecast
+  ic_distribution_weekly <- ic_update_weekly
+
+  #Build temporary data frame to hold current initial condition and forecast
+  temp <- tibble(date = rep(forecast_dates[i], times = n_members*2),
+               chla = c(forecast_chla_weekly, ic_update_weekly),
+               ensemble_member = rep(1:n_members, times = 2),
+               data_type = rep(c("fc","ic"), each = n_members))
+
+  #Update rows of forecast series output data frame
+  forecast_series_weekly <- forecast_series_weekly %>%
+    rows_update(temp, by = c("date","ensemble_member","data_type"))
+}
+```
+
+Let's plot our series of 1-day-ahead forecasts with weekly data assimilation.
+```{r}
+plot_many_forecasts(forecast_data = forecast_data_weekly, forecast_series = forecast_series_weekly)
+```
+
+Now, we will assess the performance of the series of forecasts with weekly data assimilation.
+
+To compare our forecasts to observations, we will first calculate the mean prediction for each day.
+```{r}
+forecast_means_weekly <- forecast_series_weekly %>%
+  filter(data_type == "fc") %>%
+  group_by(date) %>%
+  summarize(forecast_mean = mean(chla, na.rm = TRUE))
+```
+
+Then, we will plot the forecasts again, this time with the observations that occurred during the forecast period.
+```{r}
+plot_many_forecasts_with_obs(forecast_data = forecast_data_weekly, forecast_series = forecast_series_weekly, observations = chla_observations)
+```
+
+**Q.39 (Shiny) Using the plot above, visually assess the forecasts and describe their accuracy. How well do they match observations?** 
+
+**Answer Q.39**
+
+
+
+Next, we will calculate the bias and RMSE of our forecasts. 
+```{r}
+bias_weekly <- mean(forecast_means_weekly$forecast_mean - chla_observations$chla, na.rm = TRUE) 
+bias_weekly
+
+rmse_weekly <- round(sqrt(mean((forecast_means_weekly$forecast_mean - chla_observations$chla)^2, na.rm = TRUE)), 2)
+rmse_weekly
+```
+
+**Q.40 (Shiny) Compare the values of bias and RMSE for forecasts with weekly data assimilation to the values of bias and RMSE for forecasts with no data assimilation. According to these two measures, which series of forecasts is more accurate?**
+
+**Answer Q.40**
+
+
+
+Now, we will compare our series of 1-day-ahead forecasts with no data assimilation and weekly data assimilation to forecasts made with daily data assimilation.
+
+Let's run the forecasts with daily data assimilation.
+
+We will change our assimilation frequency to daily. 
+```{r}
+chla_assimilation_frequency_daily = 1
+```
+
+We will update our vector of chlorophyll-a data assimilation dates.
+```{r}
+chla_assimilation_dates_daily <- forecast_dates[seq(1, length(forecast_dates), chla_assimilation_frequency_daily)]
+```
+
+Then, we will manipulate our lake data to create a `forecast_data_daily` dataframe, which is the data that will be provided to the model for forecasting.
+```{r}
+forecast_data_daily <- lake_data %>%
+  select(datetime, chla) %>%
+  mutate(datetime = as.Date(datetime)) %>%
+  filter(datetime %in% forecast_dates) %>%
+  mutate(chla = ifelse(datetime %in% chla_assimilation_dates_daily,chla,NA)) 
+```
+
+Next, we will create a data frame (`forecast_series_daily`) to hold the initial conditions and forecasts for each day in our forecast period. 
+```{r}
+forecast_series_daily <- tibble(date = rep(forecast_dates, each = n_members*2),
+              chla = NA_real_,
+              ensemble_member = rep(1:n_members, times = length(forecast_dates)*2),
+              data_type = rep(c("fc","ic"), each = n_members, times = length(forecast_dates)))
+```
+
+Finally, we will populate our `forecast_series_daily` data frame with the initial conditions distribution for the very first day of the forecast period. 
+```{r}
+ic_distribution_daily <- ic_distribution #assign the first initial conditions distribution
+
+temp_ic <- tibble(date = rep(forecast_dates[1], each = n_members),
+              chla = ic_distribution_daily,
+              ensemble_member = c(1:n_members),
+              data_type = rep("ic", times = n_members))
+
+forecast_series_daily <- forecast_series_daily %>%
+  rows_update(temp_ic, by = c("date","ensemble_member","data_type"))
+```
+
+Finally, we run our series of forecasts! Here, we loop through days in our forecast period and generate 1-day-ahead predictions with our autoregressive model. 
+```{r}
+for(i in 2:length(forecast_dates)){
+  
+  #Generate forecast
+  forecast_chla_daily = intercept + ar1 * (ic_distribution_daily - chla_mean) + chla_mean + process_distribution
+
+  #Select current row of forecast_data to see if there is data to use for updating
+  new_obs_daily <- forecast_data_daily$chla[i] #Observed chl-a
+
+  #Update the initial condition
+  ic_update_daily <- EnKF(forecast = forecast_chla_daily, new_observation = new_obs_daily, ic_sd = ic_sd)
+  
+  #Assign the updated initial condition to be used for the next day's forecast
+  ic_distribution_daily <- ic_update_daily
+
+  #Build temporary data frame to hold current initial condition and forecast
+  temp <- tibble(date = rep(forecast_dates[i], times = n_members*2),
+               chla = c(forecast_chla_daily, ic_update_daily),
+               ensemble_member = rep(1:n_members, times = 2),
+               data_type = rep(c("fc","ic"), each = n_members))
+
+  #Update rows of forecast series output data frame
+  forecast_series_daily <- forecast_series_daily %>%
+    rows_update(temp, by = c("date","ensemble_member","data_type"))
+}
+```
+
+Let's plot our series of 1-day-ahead forecasts with weekly data assimilation.
+```{r}
+plot_many_forecasts(forecast_data = forecast_data_daily, forecast_series = forecast_series_daily)
+```
+
+Now, we will assess the performance of the series of forecasts with daily data assimilation.
+
+To compare our forecasts to observations, we will first calculate the mean prediction for each day.
+```{r}
+forecast_means_daily <- forecast_series_daily %>%
+  filter(data_type == "fc") %>%
+  group_by(date) %>%
+  summarize(forecast_mean = mean(chla, na.rm = TRUE))
+```
+
+Then, we will plot the forecasts again, this time with the observations that occurred during the forecast period.
+```{r}
+plot_many_forecasts_with_obs(forecast_data = forecast_data_daily, forecast_series = forecast_series_daily, observations = chla_observations)
+```
+
+**Q.41 (Shiny) Using the plot above, visually assess the forecasts and describe their accuracy. How well do they match observations?** 
+
+**Answer Q.41**
+
+
+
+Next, we will calculate the bias and RMSE of our forecasts. 
+```{r}
+bias_daily <- mean(forecast_means_daily$forecast_mean - chla_observations$chla, na.rm = TRUE) 
+bias_daily
+
+rmse_daily <- round(sqrt(mean((forecast_means_daily$forecast_mean - chla_observations$chla)^2, na.rm = TRUE)), 2)
+rmse_daily
+```
+
+**Q.42 (Shiny) Compare the values of bias and RMSE for forecasts with daily data assimilation to the values of bias and RMSE for forecasts with weekly and no data assimilation. According to these measures, which series of forecasts is the most accurate?**
+
+**Answer Q.42**
+
+
+
+**Q.43 (Shiny) Fill in the blank: as the frequency of data assimilation increases, forecast accuracy ____________. Choose from 'increases', 'decreases', or 'stays the same.' How does your answer now compare to what your answer in Q33?**
+
+**Answer Q.43**
+
+
+## Activity C
+
+## Objective 8. Fit a model and calculate uncertainty for a different water quality variable.
+
+We have learned that more frequent data assimilation can improve the accuracy of chlorophyll-a forecasts. In the next two objectives (Objectives 8-9), you will explore the value of data assimilation for forecasts of a different water quality variable of your choosing.
+
+In Objective 8, you will fit an autoregressive model and calculate uncertainty for a water quality variable of your choice. In Objective 9, you will determine the optimal frequency of data assimilation for a given forecast period for that water quality variable.
+
+You may choose between surface water temperature, dissolved oxygen, and surface nitrogen concentrations. Each of these variables has important implications for water quality.
+
+**Water temperature** is a key variable that controls survival and growth rates of organisms as well as the amount and distribution of oxygen and nutrients in the water.
+
+**Dissolved oxygen** is critical for survival of heterotrophs (e.g., fish, zooplankton) that require it for respiration, and also controls water chemistry.
+
+**Nitrogen** is an important nutrient for growth of phytoplankton, which form the base of the food web in aquatic ecosystems, and excessive nitrogen can also lead to harmful algal blooms.
+
+**Q.44 (Rmd) Alter the code below to read in the appropriate dataset:**
+
+1. water temperature: BARC_wtemp_celsius.csv.   
+2. dissolved oxygen: BARC_dissolvedOxygen_milligramsPerLiter.csv.   
+3. surface nitrogen: BARC_surfN_micromolesPerLiter.csv.   
+
+**Answer Q.44** Edit the code block to provide your answer.
+
+```{r}
+lake_data <- read_csv("./data/BARC_chla_microgramsPerLiter.csv", show_col_types = FALSE) %>%
+  rename(datetime = Date, chla = V1) %>%
+  filter(year(datetime) >= 2019) %>%
+  mutate(chla = ifelse(chla < 0, 0, chla))
+
+head(lake_data)
+```
+
+**Q.45 (Rmd) Alter the code below to plot your new water quality variable rather than chl-a.**
+
+**Answer Q.45** Edit the code block to provide your answer.
+
+```{r}
+ggplot(data = lake_data, aes(x = datetime, y = chla))+ #edit the y variable name
+    geom_point(aes(color = "Chl-a"))+ #replace Chl-a with your water quality variable name
+    xlab("")+
+    ylab(expression(paste("Chlorophyll-a (ug/L)")))+ #edit the axis title and units; water temperature will be degrees Celsius; dissolved oxygen is mg/L; surface nitrogen is micromoles per liter
+    scale_color_manual(values = c("Chl-a" = "chartreuse4"), name = "")+ #replace Chl-a with your water quality variable name; be sure it matches the name you provide to the geom_line() function above
+    theme_bw()
+```
+
+**Q.46 (Rmd) Fit an autoregressive model to your data. Alter the code below to fit a model to your new water quality variable. **
+
+**Answer Q.46** Edit the code block to provide your answer.
+
+```{r}
+forecast_start_date <- "2020-09-25"
+
+autocorrelation_data <- lake_data %>%
+    filter(datetime < forecast_start_date) %>%
+    mutate(chla = na.approx(chla, na.rm = F)) %>% #EDIT THIS TO BE YOUR CHOSEN VARIABLE
+    mutate(chla_lag = lag(chla)) %>% #EDIT THIS TO BE YOUR CHOSEN VARIABLE
+    filter(complete.cases(.))
+
+head(autocorrelation_data)
+
+ar_model <- ar.ols(model_data$chla, order.max = 1, aic = FALSE, #EDIT CHLA HERE
+                     intercept = TRUE, demean = TRUE)
+```
+
+Next, let's extract our model parameters and have a look at them.
+
+First, $\beta_0$, the intercept:
+
+```{r}
+intercept = c(ar_model$x.intercept)
+intercept
+```
+
+Next, $\beta_1$, the 1-day lag coefficient:
+
+```{r}
+ar1 = c(ar_model$ar)
+ar1
+```
+
+Then, the mean of your chosen water quality variable:
+
+```{r}
+var_mean = c(ar_model$x.mean)
+var_mean
+```
+
+**Q.47 (Rmd) Assess how well your model fits the data - make a plotting data frame by editing the code below.**
+
+**Answer Q.47** Edit the code block to provide your answer.
+
+```{r}
+model_fit_plot_data <- tibble(date = model_data$datetime,
+                              chla = model_data$chla, #EDIT THIS TO BE YOUR VARIABLE
+                              model = mod)
+```
+
+**Q.48 (Rmd) Now, we can assess our model visually. We will plot the model predictions and observations. Alter the code to plot your water quality variable.**
+
+**Answer Q.48** Edit the code block to provide your answer.
+
+```{r}
+plot_mod_predictions(model_fit_plot_data, variable_name = "YOUR VARIABLE NAME HERE") #choose from "Water temperature (degrees C)"; "Dissolved oxygen (mg/L)"; Surface nitrogen (umol/L)"
+```
+
+**Q.49 (Rmd) Assess your model fit to data by visually inspecting the plot above. How good is your model fit?**
+
+**Answer Q.49**
+
+
+**Q.50 (Rmd) Alter the code to calculate RMSE.**
+
+**Answer Q.50** Edit the code block to provide your answer.
+
+```{r}
+rmse <- round(sqrt(mean((mod - model_data$chla)^2, na.rm = TRUE)), 2) #REPLACE CHLA IN THIS LINE WITH YOUR VARIABLE NAME
+rmse
+```
+
+**Q.51 (Rmd) Alter the code to save residuals for process uncertainty.**
+
+**Answer Q.51** Edit the code block to provide your answer.
+
+```{r}
+residuals <- mod - model_data$chla #REPLACE CHLA IN THIS LINE WITH YOUR VARIABLE NAME
+```
+
+**Q.52 Assess your model fit to data using the values of bias and RMSE. How good is your model fit?**
+
+**Answer Q.52**
+
+
+Calculate initial conditions and process uncertainty.
+
+Set the number of ensemble members.
+```{r}
+n_members = 500
+```
+
+**Q.53 (Rmd) Alter the code to read in high-frequency data of your chosen water quality variable. Choose from:**
+
+1. water temperature: wtemp_celsius_highFrequency.csv.   
+2. dissolved oxygen: dissolvedOxygen_milligramsPerLiter_highFrequency.csv.   
+3. surface nitrogen: surfN_micromolesPerLiter_highFrequency.csv.
+
+**Answer Q.53** Edit the code block to provide your answer.
+
+```{r}
+high_frequency_data <- read_csv("./data/chla_microgramsPerLiter_highFrequency.csv", show_col_types = FALSE) 
+```
+
+**Q.54 (Rmd) Alter the code below to plot high-frequency data of your chosen variable.**
+
+**Answer Q.54** Edit the code block to provide your answer.
+
+```{r}
+ggplot(data = high_frequency_data)+
+  geom_line(aes(x = time, y = chla, group = day, color = as.factor(day)))+ #edit the y variable here!
+  theme_bw()+
+  labs(color = "Day of experiment")+
+  xlab("Hour of day")+
+  ylab("Chlorophyll-a (ug/L)") #edit the axis title here!
+```
+
+**Q.55 Alter the code below to calculate standard deviation of the variable each day.**
+
+**Answer Q.55** Edit the code block to provide your answer.
+
+```{r}
+ic_sd_dataframe <- high_frequency_data %>%
+  group_by(day) %>%
+  summarize(daily_sd_chla = sd(chla, na.rm = TRUE)) #edit the variable name here!
+  
+ic_sd <- mean(ic_sd_dataframe$daily_sd_chla, na.rm = TRUE) #edit the variable name here!
+ic_sd
+```
+
+**Q.56 (Rmd) Alter the code to generate an initial condition distribution of your chosen variable.**
+
+**Answer Q.56** Edit the code block to provide your answer.
+
+```{r}
+curr_value <- lake_data %>%
+  filter(datetime == forecast_start_date) %>%
+  pull(chla) #edit variable name here!
+
+ic_distribution <- rnorm(n = n_members, mean = curr_value, sd = ic_sd)
+```
+
+Plot the distribution around your initial condition. 
+
+```{r}
+plot_ic_dist(curr_value, ic_distribution)
+```
+
+To calculate process uncertainty, we will define the standard deviation of the process uncertainty distribution, `sigma` as the standard deviation of the residuals. This is the uncertainty left over after we found the best parameters for fitting the model.
+
+```{r}
+sigma <- sd(residuals, na.rm = TRUE) # Process Uncertainty Noise Std Dev.; this is your sigma
+```
+
+Use `rnorm()` to generate your process uncertainty distribution, using 0 as the mean and `sigma` as the standard deviation.
+
+```{r}
+process_distribution <- rnorm(n = n_members, mean = 0, sd = sigma)
+```
+
+Plot the process uncertainty distribution. We will use this distribution to account for uncertainty in our forecast.
+
+```{r}
+plot_process_dist(process_distribution)
+```
+
+
+## Objective 10. Determine the optimal frequency of data asssimilation for forecasts of your water quality variable.
+
+In this objective, you will run forecasts with different frequencies of data assimilation and assess forecast performance. The goal is to figure out the optimal frequency of data collection to minimize RMSE over the forecast period.
+
+First, we will specify how many 1-day-ahead forecasts we would like to make.
+
+```{r}
+days_to_forecast = 10
+```
+
+Then we will create a date vector of our forecast start dates, based on how many days we would like to forecast.
+
+```{r}
+forecast_dates <- seq.Date(from = as.Date(forecast_start_date), to = as.Date(forecast_start_date) + days_to_forecast, by = 'days')
+```
+
+Next, we need to specify how often we want the forecast model to assimilate data. You will need to alter this value to determine the optimal frequency of data assimilation for your chosen water quality variable. 
+
+```{r}
+variable_assimilation_frequency = 11
+```
+
+Before we run the forecast, we need to format our lake data to play nicely with our forecasting function. First, we will create a vector (`variable_assimilation_dates`) that we will use as an index to be sure that we only provide the model with the data that we want to assimilate. 
+
+```{r}
+variable_assimilation_dates <- forecast_dates[seq(1, length(forecast_dates), variable_assimilation_frequency)]
+```
+
+**Q.57 (Rmd) Alter the code below to create a `forecast_data` data frame, which is the data that will be provided to the model for forecasting.**
+
+**Answer Q.57** Edit the code block to provide your answer.
+
+```{r}
+forecast_data <- lake_data %>%
+  select(datetime, chla) %>% #edit this to be your variable!
+  mutate(datetime = as.Date(datetime)) %>%
+  filter(datetime %in% forecast_dates) %>%
+  mutate(chla = ifelse(datetime %in% chla_assimilation_dates_no_da,chla,NA)) #edit this to be your variable!!
+```
+
+**Q.58 (Rmd) Alter the code below to create a data frame (`forecast_series`) to hold the initial conditions and forecasts for each day in our forecast period.** 
+
+**Answer Q.58** Edit the code block to provide your answer.
+
+```{r}
+forecast_series <- tibble(date = rep(forecast_dates, each = n_members*2),
+              chla = NA_real_, #edit this column name to be your chosen variable!
+              ensemble_member = rep(1:n_members, times = length(forecast_dates)*2),
+              data_type = rep(c("fc","ic"), each = n_members, times = length(forecast_dates)))
+```
+
+**Q.59 (Rmd) Alter the code below to create a temporary data frame for the initial conditions distribution that matches the format of `forecast_series`.**
+
+**Answer Q.59** Edit the code block to provide your answer.
+
+```{r}
+temp_ic <- tibble(date = rep(forecast_dates[1], each = n_members),
+              chla = ic_distribution, #edit this column name to be your chosen variable!
+              ensemble_member = c(1:n_members),
+              data_type = rep("ic", times = n_members))
+```
+
+Update the relevant rows of the `forecast_series` data frame with the values of `ic_distribution` using the `rows_update()` function. 
+
+```{r}
+forecast_series <- forecast_series %>%
+  rows_update(temp_ic, by = c("date","ensemble_member","data_type"))
+```
+
+**Q.60 (Rmd) Alter the code below to run a series of forecasts for your chosen water quality variable.**
+
+**Answer Q.60** Edit the code block to provide your answer.
+
+```{r}
+for(i in 2:length(forecast_dates)){
+  
+  #Generate forecast
+  forecast_variable = intercept + ar1 * (ic_distribution - var_mean) + var_mean + process_distribution
+
+  #Select current row of forecast_data to see if there is data to use for updating
+  new_obs <- forecast_data$chla[i] #edit this to be your chosen variable name!
+
+  #Update the initial condition
+  ic_update <- EnKF(forecast = forecast_variable, new_observation = new_obs, ic_sd = ic_sd)
+  
+  #Assign the updated initial condition to be used for the next day's forecast
+  ic_distribution <- ic_update
+
+  #Build temporary data frame to hold current initial condition and forecast
+  temp <- tibble(date = rep(forecast_dates[i], times = n_members*2),
+               chla = c(forecast_variable, ic_update), #edit this column name to be your chosen variable!
+               ensemble_member = rep(1:n_members, times = 2),
+               data_type = rep(c("fc","ic"), each = n_members))
+
+  #Update rows of forecast series output data frame
+  forecast_series <- forecast_series %>%
+    rows_update(temp, by = c("date","ensemble_member","data_type"))
+}
+```
+
+Let's plot our series of 1-day-ahead forecasts with no data assimilation.
+
+```{r}
+plot_many_forecasts(forecast_data = forecast_data, forecast_series = forecast_series)
+```
+
+**Q.61 (Rmd) Describe how the mean value of the 1-day-ahead forecasts changes over time when no data are assimilated.** 
+
+**Answer Q.61**
+
+
+**Q.62 (Rmd) Describe how the uncertainty distribution of the 1-day-ahead forecasts changes over time when no data are assimilated.**
+
+**Answer Q.62**
+
+
+Now, we will assess the performance of the series of forecasts.
+
+**Q.63 (Rmd) To compare our forecasts to observations, alter the code below to calculate the mean prediction for each day.**
+
+**Answer Q.63** Edit the code block to provide your answer.
+
+```{r}
+forecast_means <- forecast_series %>%
+  filter(data_type == "fc") %>%
+  group_by(date) %>%
+  summarize(forecast_mean = mean(chla, na.rm = TRUE)) #edit this to be your chosen variable name!
+```
+
+We will also create a data frame of observations from Lake Barco that are available for our forecast period.
+
+```{r}
+variable_observations <- lake_data %>%
+  filter(datetime %in% forecast_dates)
+```
+
+Then, we will plot the forecasts again, this time with the observations that occurred during the forecast period.
+
+```{r}
+plot_many_forecasts_with_obs(forecast_data = forecast_data, forecast_series = forecast_series, observations = variable_observations)
+```
+
+**Q.64 (Rmd) Using the plot above, visually assess the forecasts and describe their accuracy. How well do they match observations?** 
+
+**Answer Q.64**
+
+
+**Q.65 (Rmd) Alter the code below to calculate the bias and RMSE of your forecasts.**
+
+**Answer Q.65** Edit the code block to provide your answer.
+
+```{r}
+bias <- mean(forecast_means$forecast_mean - variable_observations$chla, na.rm = TRUE) 
+bias
+
+rmse <- round(sqrt(mean((forecast_means$forecast_mean - variable_observations$chla)^2, na.rm = TRUE)), 2) #edit this to be your chosen variable name!
+rmse
+```
+
+**Q.66 (Rmd) Use the values of bias and RMSE to assess the forecasts with no data assimilation. How well do you think the forecasts are performing?**
+
+**Answer Q.66**
+
+
+Use the provided code above to alter the frequency of data assimilation to determine the optimal frequency of data assimilation during the forecast period for your chosen variable. The optimal frequency of data assimilation will be the frequency that minimizes RMSE during the forecast period.
+
+*Hint: you will need to change the value of the variable_assimilation_frequency object.*
+
+**Q.67 (Rmd) What is the optimal frequency of data assimilation (in days) for your chosen water quality variable? What is the RMSE at that frequency of data assimilation?**
+
+**Answer Q.67**
+
+
+Congratulations! You have assimilated all the data. Now, have a nap. :-)  
+  
+## Knitting, committing, and submitting
+
+Be sure to check with your instructor as to how this assignment is to be submitted and graded. If necessary, remember to Knit your document and commit+push your code to GitHub.
