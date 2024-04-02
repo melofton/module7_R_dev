@@ -121,7 +121,7 @@ plot_mod_predictions <- function(model_fit_plot_data, variable_name){
 #'@param curr_chla mean initial condition of chla
 #'@param ic_uc vector draws from a distribution of initial conditions
 #'
-plot_ic_dist <- function(curr_chla, ic_uc){
+plot_ic_dist <- function(curr_chla, ic_uc, x.lab){
   
   #Set colors
   l.cols <- RColorBrewer::brewer.pal(8, "Set2")[-c(1, 2)] # Defining another custom color palette :-)
@@ -131,7 +131,7 @@ plot_ic_dist <- function(curr_chla, ic_uc){
     # geom_vline(data = df, aes(xintercept = x, color = label)) +
     geom_vline(xintercept = curr_chla) +
     geom_density(aes(ic_uc), fill = l.cols[2], alpha = 0.3) +
-    xlab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")"))) +
+    xlab(x.lab) +
     ylab("Density") +
     theme_bw(base_size = 18)+
     ggtitle("Initial condition distribution")
@@ -140,7 +140,7 @@ plot_ic_dist <- function(curr_chla, ic_uc){
 #### Function to plot distribution of process uncertainty ----
 #'@param proc_uc vector draws from a distribution of proc uc
 #'
-plot_process_dist <- function(proc_uc){
+plot_process_dist <- function(proc_uc, x.lab){
   
   #Set colors
   l.cols <- RColorBrewer::brewer.pal(8, "Set2")[-c(1, 2)] # Defining another custom color palette :-)
@@ -149,7 +149,7 @@ plot_process_dist <- function(proc_uc){
   ggplot() +
     geom_vline(xintercept = 0) +
     geom_density(aes(proc_uc), fill = l.cols[1], alpha = 0.3) +
-    xlab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")"))) +
+    xlab(x.lab) +
     ylab("Density") +
     theme_bw(base_size = 18)+
     ggtitle("Process uncertainty distribution")
@@ -158,17 +158,17 @@ plot_process_dist <- function(proc_uc){
 #### Function to plot distribution of a forecast ----
 #'@param forecast_dist vector of forecast distribution
 #'
-plot_fc_dist <- function(forecast_dist){
+plot_fc_dist <- function(forecast_dist, x.lab){
   
   #Set colors
   l.cols <- RColorBrewer::brewer.pal(8, "Set2")[-c(1, 2)] # Defining another custom color palette :-)
   #Build plot
   ggplot() +
     geom_density(aes(forecast_dist), fill = l.cols[3], alpha = 0.3) +
-    xlab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")"))) +
+    xlab(x.lab) +
     ylab("Density") +
     theme_bw(base_size = 18)+
-    ggtitle("Chl-a forecast distribution")
+    ggtitle("Forecast distribution")
 }
 
 
@@ -316,28 +316,35 @@ plot_second_forecast <- function(chla_obs, start_date, forecast_dates, ic_distri
 
 #' Multiple-day forecast plot with updated initial conditions
 #' 
-plot_many_forecasts <- function(forecast_data, forecast_series){
+plot_many_forecasts <- function(forecast_data, forecast_series, forecast_var, y.lab){
 
+  new = "var"
+  old = forecast_var
+  
+  forecast_data <- forecast_data %>%
+    rename_with(~ new, all_of(old))
+  
   forecast_dates <- unique(forecast_series$date)
   forecast_series <- forecast_series %>%
+    rename_with(~ new, all_of(old)) %>%
     mutate(datefactor = as.factor(format(date, "%m-%d")),
-           chla = ifelse((date == last(forecast_dates) & data_type == "ic"),NA,chla))
+           var = ifelse((date == last(forecast_dates) & data_type == "ic"),NA,var))
   ic <- forecast_series %>%
     filter(data_type == "ic")
   fc <- forecast_series %>%
     filter(data_type == "fc")
   obs <- tibble(date = forecast_data$datetime,
-                obs = forecast_data$chla) %>%
+                obs = forecast_data$var) %>%
     mutate(datefactor = as.factor(format(date, "%m-%d")),
            obs = ifelse(date == last(forecast_dates),NA,obs))
   
   p <- ggplot()+
-    geom_line(data = forecast_series, aes(x = datefactor, y = chla, group = ensemble_member, color = "Ensemble members"))+
-    geom_violinhalf(data = fc, aes(x = datefactor, y = chla, fill = "Forecast"), color = "black",
+    geom_line(data = forecast_series, aes(x = datefactor, y = var, group = ensemble_member, color = "Ensemble members"))+
+    geom_violinhalf(data = fc, aes(x = datefactor, y = var, fill = "Forecast"), color = "black",
                     scale = "width", width = 0.7)+
-    geom_violinhalf(data = ic, aes(x = datefactor, y = chla, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_violinhalf(data = ic, aes(x = datefactor, y = var, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
     geom_point(data = obs, aes(x = datefactor, y = obs, color = "Observations"), size = 3)+
-    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    ylab(y.lab)+
     xlab("")+
     theme_bw()+
     theme(panel.grid.major.x = element_line(colour = "black", linetype = "dashed"),
@@ -361,31 +368,41 @@ plot_many_forecasts <- function(forecast_data, forecast_series){
 
 #' Multiple-day forecast plot with updated initial condition and all observations plotted
 #' 
-plot_many_forecasts_with_obs <- function(forecast_data, forecast_series, observations){
+plot_many_forecasts_with_obs <- function(forecast_data, forecast_series, observations, forecast_var, y.lab){
+  
+  new = "var"
+  old = forecast_var
+  
+  forecast_data <- forecast_data %>%
+    rename_with(~ new, all_of(old))
+  
+  observations <- observations %>%
+    rename_with(~ new, all_of(old))
   
   forecast_dates <- unique(forecast_series$date)
   forecast_series <- forecast_series %>%
+    rename_with(~ new, all_of(old)) %>%
     mutate(datefactor = as.factor(format(date, "%m-%d")),
-           chla = ifelse((date == last(forecast_dates) & data_type == "ic"),NA,chla))
+           var = ifelse((date == last(forecast_dates) & data_type == "ic"),NA,var))
   ic <- forecast_series %>%
     filter(data_type == "ic")
   fc <- forecast_series %>%
     filter(data_type == "fc")
   obs_assim <- tibble(date = forecast_data$datetime,
-                obs = forecast_data$chla) %>%
+                obs = forecast_data$var) %>%
     mutate(datefactor = as.factor(format(date, "%m-%d")),
            obs = ifelse(date == last(forecast_dates),NA,obs))
   obs_not_assim <- observations %>%
     mutate(datefactor = as.factor(format(datetime, "%m-%d")))
   
   p <- ggplot()+
-    geom_line(data = forecast_series, aes(x = datefactor, y = chla, group = ensemble_member, color = "Ensemble members"))+
-    geom_violinhalf(data = fc, aes(x = datefactor, y = chla, fill = "Forecast"), color = "black",
+    geom_line(data = forecast_series, aes(x = datefactor, y = var, group = ensemble_member, color = "Ensemble members"))+
+    geom_violinhalf(data = fc, aes(x = datefactor, y = var, fill = "Forecast"), color = "black",
                     scale = "width", width = 0.7)+
-    geom_violinhalf(data = ic, aes(x = datefactor, y = chla, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
-    geom_point(data = obs_not_assim, aes(x = datefactor, y = chla, color = "Obs. - not assimilated"), size = 3, shape = 21)+
+    geom_violinhalf(data = ic, aes(x = datefactor, y = var, fill = "Initial condition"), color = "cornflowerblue", alpha = 0.4, scale = "width", width = 0.7)+
+    geom_point(data = obs_not_assim, aes(x = datefactor, y = var, color = "Obs. - not assimilated"), size = 3, shape = 21)+
     geom_point(data = obs_assim, aes(x = datefactor, y = obs, color = "Obs. - assimilated"), size = 3)+
-    ylab(expression(paste("Chlorophyll-a (",mu,g,~L^-1,")")))+
+    ylab(y.lab)+
     xlab("")+
     theme_bw()+
     theme(panel.grid.major.x = element_line(colour = "black", linetype = "dashed"),
