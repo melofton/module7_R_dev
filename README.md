@@ -1,5 +1,6 @@
 # Macrosystems EDDIE Module 7: Using Data to Improve Ecological Forecasts
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10903839.svg)](https://doi.org/10.5281/zenodo.10903839)
 <a href="url"><img src="module_admin/mod7_conceptual_figure.png" align="right" height="220" width="269" ></a>
 
 Ecological forecasting is a tool that can be used for understanding and predicting changes in populations, communities, and ecosystems. Ecological forecasting is an emerging approach that provides an estimate of the future state of an ecological system with uncertainty, allowing society to prepare for changes in important ecosystem services. 
