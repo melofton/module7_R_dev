@@ -8,7 +8,7 @@
 pacman::p_load(tidyverse, lubridate, data.table, zoo, sparklyr, neonUtilities, hms)
 
 #define NEON token
-source("./neon_token_source.R")
+source("./module_admin/neon_token_source.R")
 
 # Get high-frequency data to inform IC distribution
 #read in site info
@@ -282,7 +282,7 @@ wq_full <- waq_instantaneous %>%
   dplyr::filter(((sensorDepth > 0 & sensorDepth < 1)| is.na(sensorDepth))) |> 
   dplyr::mutate(startDateTime = as_datetime(startDateTime)) %>%
   dplyr::select(startDateTime, site_id, DO) %>%
-  dplyr::filter(site_id == "BARC" & month(startDateTime) %in% c(9:10) & year(startDateTime) == 2019)
+  dplyr::filter(site_id == "BARC" & month(startDateTime) %in% c(9:10) & year(startDateTime) == 2019) 
 
 # dissolved oxygen ranges
 do_max <- 20
@@ -293,9 +293,8 @@ wq_cleaned <- wq_full %>%
 # manual cleaning based on visual inspection
 
 ##############################################################################
-gplot(data = wq_cleaned, aes(x = startDateTime, y = DO))+
+ggplot(data = wq_cleaned, aes(x = datetime, y = DO))+
   geom_point()+
-  facet_wrap(vars(site_id), scales = "free", nrow = 2)+
   theme_bw()
 ##############################################################################
 
@@ -391,3 +390,139 @@ wtemp <- read_csv("./module_admin/data/BARC_wtemp_celsius_highFrequency.csv") %>
   ungroup() %>%
   select(-date, -datetime)
 write.csv(wtemp,"./assignment/data/wtemp_celsius_highFrequency.csv",row.names = FALSE)
+
+
+## Slight data wrangling of non-high-frequency data ----
+
+# water temp ----
+
+wtemp <- read_csv("./module_admin/data/neon/BARC_wtemp_celsius.csv") %>%
+  filter(thermistorDepth == 1.05) %>%
+  rename(datetime = Date) %>%
+  select(datetime, V1)
+
+ggplot(data = wtemp, aes(x = datetime, y = V1))+
+  geom_point()+
+  theme_bw()
+
+write.csv(wtemp, "./module_admin/data/neon/BARC_wtemp_celsius.csv", row.names = FALSE)
+
+# DO ----
+
+DO <- read_csv("./module_admin/data/neon/BARC_dissolvedOxygen_milligramsPerLiter.csv") %>%
+  rename(Date = collectDate,
+         V1 = dissolvedOxygen)
+
+ggplot(data = DO, aes(x = Date, y = V1))+
+  geom_point()+
+  theme_bw()
+
+#ok this is not high-frequency data, what gives
+
+#rewrangling from scratch
+
+wq <- loadByProduct(dpID="DP1.20288.001", site=c("BARC"),
+                    startdate="2018-01", enddate="2022-12", 
+                    package="expanded", 
+                    token = NEON_TOKEN,
+                    check.size = F,
+                    release = "current",
+                    include.provisional = T)
+
+# unlist the variables and add to the global environment
+list2env(wq, .GlobalEnv)
+colnames(waq_instantaneous)
+
+wq_full <- waq_instantaneous %>%
+  dplyr::select(siteID, startDateTime, sensorDepth,
+                dissolvedOxygen) %>%
+  dplyr::mutate(sensorDepth = as.numeric(sensorDepth),
+                DO = as.numeric(dissolvedOxygen)) %>%
+  dplyr::rename(site_id = siteID) %>% 
+  dplyr::filter(((sensorDepth > 0 & sensorDepth < 1)| is.na(sensorDepth))) |> 
+  dplyr::mutate(startDateTime = as_datetime(startDateTime)) %>%
+  dplyr::select(startDateTime, site_id, DO) %>%
+  dplyr::filter(site_id == "BARC") %>%
+  dplyr::mutate(datetime = date(startDateTime)) %>%
+  group_by(datetime) %>%
+  summarize(DO = mean(DO, na.rm = TRUE))
+
+# dissolved oxygen ranges
+do_max <- 20
+do_min <- 0
+
+wq_cleaned <- wq_full %>%
+  dplyr::mutate(DO = ifelse(is.na(DO),DO, ifelse(DO >= do_min & DO <= do_max, DO, NA))) 
+# manual cleaning based on visual inspection
+
+##############################################################################
+ggplot(data = wq_cleaned, aes(x = datetime, y = DO))+
+  geom_point()+
+  theme_bw()
+##############################################################################
+
+do_final <- wq_cleaned %>%
+  select(datetime, DO) %>%
+  rename(V1 = DO) %>%
+  filter(complete.cases(.))
+
+write.csv(do_final, "./module_admin/data/neon/BARC_dissolvedOxygen_milligramsPerLiter.csv",row.names = FALSE)
+
+# surf N ----
+
+surfN <- read_csv("./module_admin/data/neon/BARC_surfN_micromolesPerLiter.csv") 
+
+ggplot(data = surfN, aes(x = Date, y = V1))+
+  geom_point()+
+  theme_bw()
+
+# this also look poor; going to rerun just to check
+
+nit <- loadByProduct(dpID="DP1.20033.001", site=c("BARC"),
+                     startdate="2018-01", enddate="2022-12", 
+                     package="expanded", 
+                     token = NEON_TOKEN,
+                     check.size = F,
+                     release = "current",
+                     include.provisional = T)
+
+# unlist the variables and add to the global environment
+list2env(nit, .GlobalEnv)
+colnames(NSW_15_minute)
+
+nit_full <- NSW_15_minute %>%
+  dplyr::select(siteID, startDateTime, 
+                surfWaterNitrateMean) %>%
+  dplyr::mutate(nitrate = as.numeric(surfWaterNitrateMean)) %>%
+  dplyr::rename(site_id = siteID) %>% 
+  dplyr::mutate(startDateTime = as_datetime(startDateTime)) %>%
+  dplyr::select(startDateTime, site_id, nitrate) %>%
+  dplyr::filter(site_id == "BARC") %>%
+  dplyr::mutate(datetime = date(startDateTime)) %>%
+  group_by(datetime) %>%
+  summarize(nitrate = mean(nitrate, na.rm = TRUE))
+
+# nitrate ranges
+nitrate_max <- 200
+nitrate_min <- 0
+
+nit_cleaned <- nit_full %>%
+  dplyr::mutate(nitrate = ifelse(is.na(nitrate),nitrate, ifelse(nitrate >= nitrate_min & nitrate <= nitrate_max, nitrate, NA))) 
+# manual cleaning based on visual inspection
+
+##############################################################################
+ggplot(data = nit_cleaned, aes(x = datetime, y = nitrate))+
+  geom_point()+
+  theme_bw()
+##############################################################################
+
+nit_final <- nit_cleaned %>%
+  select(datetime, nitrate) %>%
+  rename(V1 = nitrate) %>%
+  filter(complete.cases(.))
+
+write.csv(nit_final, "./module_admin/data/neon/BARC_surfN_micromolesPerLiter.csv",row.names = FALSE)
+
+
+
+
