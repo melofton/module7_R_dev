@@ -18,7 +18,13 @@ This repository contains the RMarkdown version of Macrosystems EDDIE Module 7: U
 
 ## Assignment
   
-All work for this assignment is in the `assignment` directory. Code is contained in the `module7.Rmd` notebook, and final rendered output files (`module7.html`) will be generated in the `assignment` directory as well. The general rubric you will be graded on is found in the `rubric.md` file.  
+All work for this assignment is in the `assignment` directory. Code is contained in the `module7.Rmd` notebook, and final rendered output files (`module7.html`) will be generated in the `assignment` directory as well. The general rubric you will be graded on is found in the `rubric.md` file. 
+
+Within the assignment directory, in addition to the `.Rmd` file, you will also see the following folders:
+
+- `/data` contains data files that will be read in for use during the module.  
+- `/images` contains image files that will be read in for use during the module.
+- `/R` contains an R script that is used to define custom plotting and forecasting functions.
   
 ## Other files
   
