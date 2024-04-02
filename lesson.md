@@ -37,17 +37,17 @@ If you would like to review key slides from the introductory presentation accomp
 In this module, we will generate one-day-ahead forecasts of lake chlorophyll-a. First, we will generate forecasts that do not assimilate any data. This will involve the following steps:  
 
 #### Activity A
-Objective 1. Read in and visualize chlorophyll-a data from Lake Barco, FL, USA.  
-Objective 2. Explore autocorrelation of Lake Barco chlorophyll-a data.    
-Objective 3. Fit an autoregressive forecast model.   
-Objective 4. Generate a one-day-ahead forecast with uncertainty.
+**Objective 1.** Read in and visualize chlorophyll-a data from Lake Barco, FL, USA.  
+**Objective 2.** Explore autocorrelation of Lake Barco chlorophyll-a data.    
+**Objective 3.** Fit an autoregressive forecast model.   
+**Objective 4.** Generate a one-day-ahead forecast with uncertainty.
 
 Next, we will explore the effect of **data assimilation** on forecast output.  
 
 #### Activity B
-Objective 5. Compare one-day-ahead forecasts generated with and without data assimilation.  
-Objective 6. Compare one-day-ahead forecasts generated with data assimilation, using data with low vs. high observation uncertainty.  
-Objective 7. Compare a series of one-day-ahead forecasts with no data assimilation, weekly data assimilation, and daily data assimilation. 
+**Objective 5.** Compare one-day-ahead forecasts generated with and without data assimilation.  
+**Objective 6.** Compare one-day-ahead forecasts generated with data assimilation, using data with low vs. high observation uncertainty.  
+**Objective 7.** Compare a series of one-day-ahead forecasts with no data assimilation, weekly data assimilation, and daily data assimilation. 
 
 Then, you will be asked to apply what you have learned about how data collection frequency and observation uncertainty affect data assimilation to improve forecast accuracy.
 
@@ -55,8 +55,8 @@ Then, you will be asked to apply what you have learned about how data collection
 Finally, you will have the opportunity to explore the effect of data assimilation on forecasts for a water quality variable of your choice.
 
 ##### Independent coding activity
-Objective 8. Fit a model and calculate uncertainty for a different water quality variable.  
-Objective 9. Determine the optimal frequency of data assimilation for forecasts of your water quality variable.
+**Objective 8.** Fit a model and calculate uncertainty for a different water quality variable.  
+**Objective 9.** Determine the optimal frequency of data assimilation for forecasts of your water quality variable.
   
 Example code is provided for Objectives 1-7, and you will be asked several short answer questions to interpret code output. Many of these short answer questions parallel (and in some cases are identical to) questions in the R Shiny app version of the module. Questions which are identical to those in the Shiny app will be indicated with **(Shiny)**, while questions unique to this RMarkdown will be indicated with **(Rmd)**. Note that question numbers will differ between the RMarkdown and the Shiny app, even if the question text is the same. Beginning in Objective 8, you will be guided to build on the module code by adjusting example code or developing your own code. Keep in mind that the example code is provided to help you, and use as much of it as you can in completing the questions embedded in Objective 8-9. There are a total of 67 questions. Please see the module rubric for possible points per question and confirm with your instructor whether and how the module will be graded.  
 
