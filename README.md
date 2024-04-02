@@ -14,7 +14,7 @@ To be useful for management, ecological forecasts need to be both accurate enoug
 
 In this module, you will explore how assimilating data with different amounts of observation uncertainty and at different temporal frequencies affects forecasts of water quality at a lake site of your choice. 
 
-This repository contains the RMarkdown version of Macrosystems EDDIE Module 7: Using Data to Improve Ecological Forecasts. Instructional materials associated with teaching the module can be found [here]([https://serc.carleton.edu/dev/eddie/teaching_materials/modules/module7.html](https://serc.carleton.edu/eddie/teaching_materials/modules/module7.html)). The module is also available as an [R Shiny application](https://macrosystemseddie.shinyapps.io/module7/) for students and instructors who wish to complete module activities without coding. 
+This repository contains the RMarkdown version of Macrosystems EDDIE Module 7: Using Data to Improve Ecological Forecasts. Instructional materials associated with teaching the module can be found [here](https://serc.carleton.edu/eddie/teaching_materials/modules/module7.html). The module is also available as an [R Shiny application](https://macrosystemseddie.shinyapps.io/module7/) for students and instructors who wish to complete module activities without coding. 
 
 ## Assignment
   
